@@ -1,0 +1,105 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|c:\\users\\qjoly\\onedrive - nge\\documents\\github\\api_ekialis-sp\\services\\sharepointrestservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|solutionrelative:services\\sharepointrestservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|c:\\users\\qjoly\\onedrive - nge\\documents\\github\\api_ekialis-sp\\controllers\\comparaisoncontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|solutionrelative:controllers\\comparaisoncontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|c:\\users\\qjoly\\onedrive - nge\\documents\\github\\api_ekialis-sp\\controllers\\ekialiscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|solutionrelative:controllers\\ekialiscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|c:\\users\\qjoly\\onedrive - nge\\documents\\github\\api_ekialis-sp\\models\\fieldmapping.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|solutionrelative:models\\fieldmapping.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|c:\\users\\qjoly\\onedrive - nge\\documents\\github\\api_ekialis-sp\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{0497BCF5-A59E-49F1-B4B3-0B6CF00D6429}|API Ekialis-Excel.csproj|solutionrelative:appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ComparaisonController.cs",
+              "DocumentMoniker": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\Controllers\\ComparaisonController.cs",
+              "RelativeDocumentMoniker": "Controllers\\ComparaisonController.cs",
+              "ToolTip": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\Controllers\\ComparaisonController.cs",
+              "RelativeToolTip": "Controllers\\ComparaisonController.cs",
+              "ViewState": "AgIAAJwAAAAAAAAAAAAUwLcAAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-23T13:02:39.326Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "SharePointRestService.cs",
+              "DocumentMoniker": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\Services\\SharePointRestService.cs",
+              "RelativeDocumentMoniker": "Services\\SharePointRestService.cs",
+              "ToolTip": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\Services\\SharePointRestService.cs",
+              "RelativeToolTip": "Services\\SharePointRestService.cs",
+              "ViewState": "AgIAAAUBAAAAAAAAAAAUwCABAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-23T13:02:02.458Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "FieldMapping.cs",
+              "DocumentMoniker": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\Models\\FieldMapping.cs",
+              "RelativeDocumentMoniker": "Models\\FieldMapping.cs",
+              "ToolTip": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\Models\\FieldMapping.cs",
+              "RelativeToolTip": "Models\\FieldMapping.cs",
+              "ViewState": "AgIAACAAAAAAAAAAAAAYwDsAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-23T12:55:03.803Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\appsettings.json",
+              "RelativeDocumentMoniker": "appsettings.json",
+              "ToolTip": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\appsettings.json",
+              "RelativeToolTip": "appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-07-23T12:48:32.567Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "EkialisController.cs",
+              "DocumentMoniker": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\Controllers\\EkialisController.cs",
+              "RelativeDocumentMoniker": "Controllers\\EkialisController.cs",
+              "ToolTip": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\Controllers\\EkialisController.cs",
+              "RelativeToolTip": "Controllers\\EkialisController.cs",
+              "ViewState": "AgIAAIoAAAAAAAAAAAAYwJwAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-07-23T12:18:33.747Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

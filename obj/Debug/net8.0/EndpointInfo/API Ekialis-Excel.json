@@ -17,6 +17,18 @@
         }
       }
     },
+    "/api/Comparaison/synchroniser-vers-sharepoint": {
+      "post": {
+        "tags": [
+          "Comparaison"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/Ekialis/logiciels-caracteristiques": {
       "get": {
         "tags": [

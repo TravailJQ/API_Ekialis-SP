@@ -57,3 +57,63 @@ C:\Users\qjoly\OneDrive - NGE\Documents\DOCUMENTS\NGE\API EKIALIS\API Ekialis-Ex
 C:\Users\qjoly\OneDrive - NGE\Documents\DOCUMENTS\NGE\API EKIALIS\API Ekialis-Excel\bin\Debug\net8.0\System.ClientModel.dll
 C:\Users\qjoly\OneDrive - NGE\Documents\DOCUMENTS\NGE\API EKIALIS\API Ekialis-Excel\bin\Debug\net8.0\System.Memory.Data.dll
 C:\Users\qjoly\OneDrive - NGE\Documents\DOCUMENTS\NGE\API EKIALIS\API Ekialis-Excel\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\appsettings.Development.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\appsettings.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\API Ekialis-Excel.staticwebassets.endpoints.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\API Ekialis-Excel.exe
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\API Ekialis-Excel.deps.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\API Ekialis-Excel.runtimeconfig.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\API Ekialis-Excel.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\API Ekialis-Excel.pdb
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Azure.Core.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Bcl.AsyncInterfaces.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Graph.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Graph.Core.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.IdentityModel.Abstractions.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.IdentityModel.JsonWebTokens.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.IdentityModel.Logging.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.IdentityModel.Tokens.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.IdentityModel.Validators.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Kiota.Abstractions.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Kiota.Authentication.Azure.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Kiota.Http.HttpClientLibrary.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Kiota.Serialization.Form.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Kiota.Serialization.Json.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Kiota.Serialization.Multipart.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.Kiota.Serialization.Text.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Microsoft.OpenApi.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Newtonsoft.Json.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Std.UriTemplate.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Swashbuckle.AspNetCore.Swagger.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerGen.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\System.ClientModel.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\bin\Debug\net8.0\System.Memory.Data.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.csproj.AssemblyReference.cache
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.AssemblyInfoInputs.cache
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.AssemblyInfo.cs
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.csproj.CoreCompileInputs.cache
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.MvcApplicationPartsAssemblyInfo.cs
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.sourcelink.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\scopedcss\bundle\API Ekialis-Excel.styles.css
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets.build.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets.development.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets.build.endpoints.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets\msbuild.API Ekialis-Excel.Microsoft.AspNetCore.StaticWebAssets.props
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets\msbuild.API Ekialis-Excel.Microsoft.AspNetCore.StaticWebAssetEndpoints.props
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets\msbuild.build.API Ekialis-Excel.props
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets\msbuild.buildMultiTargeting.API Ekialis-Excel.props
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets\msbuild.buildTransitive.API Ekialis-Excel.props
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets.pack.json
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekia.C258D617.Up2Date
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\refint\API Ekialis-Excel.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.pdb
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\API Ekialis-Excel.genruntimeconfig.cache
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\ref\API Ekialis-Excel.dll
+C:\Users\qjoly\OneDrive - NGE\Documents\GitHub\API_Ekialis-SP\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt

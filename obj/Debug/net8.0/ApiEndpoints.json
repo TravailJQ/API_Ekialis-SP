@@ -10,6 +10,16 @@
     "ReturnTypes": []
   },
   {
+    "ContainingType": "API_Ekialis_Excel.Controllers.ComparaisonController",
+    "Method": "SynchroniserVersSharePoint",
+    "RelativePath": "api/Comparaison/synchroniser-vers-sharepoint",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
     "ContainingType": "API_Ekialis_Excel.Controllers.EkialisController",
     "Method": "GetLogicielsAvecCaracteristiques",
     "RelativePath": "api/Ekialis/logiciels-caracteristiques",

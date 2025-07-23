@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "6QIT3uVNVBU=",
+  "dgSpecHash": "y36mTHU3UDc=",
   "success": true,
-  "projectFilePath": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\DOCUMENTS\\NGE\\API EKIALIS\\API Ekialis-Excel\\API Ekialis-Excel.csproj",
+  "projectFilePath": "C:\\Users\\qjoly\\OneDrive - NGE\\Documents\\GitHub\\API_Ekialis-SP\\API Ekialis-Excel.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\qjoly\\.nuget\\packages\\azure.core\\1.44.1\\azure.core.1.44.1.nupkg.sha512",
     "C:\\Users\\qjoly\\.nuget\\packages\\microsoft.bcl.asyncinterfaces\\6.0.0\\microsoft.bcl.asyncinterfaces.6.0.0.nupkg.sha512",

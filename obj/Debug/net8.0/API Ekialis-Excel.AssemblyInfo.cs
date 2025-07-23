@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("API Ekialis-Excel")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8082426538ae0672b59e0519632d3b550c6f2606")]
 [assembly: System.Reflection.AssemblyProductAttribute("API Ekialis-Excel")]
 [assembly: System.Reflection.AssemblyTitleAttribute("API Ekialis-Excel")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
