@@ -1,1 +1,103 @@
+# ======================
+# Build Results
+# ======================
+bin/
+obj/
+out/
+
+# ======================
+# User-specific files
+# ======================
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ======================
+# VS Code / Rider / VS settings
+# ======================
+.vscode/
+.idea/
+*.code-workspace
+
+# ======================
+# ASP.NET / .NET Temp Files
+# ======================
+*.dbmdl
+*.log
+*.tlog
+*.cache
+*.pdb
+*.mdb
+*.svclog
+*.scc
+
+# ======================
+# VS Working folder
+# ======================
 .vs/
+
+# ======================
+# NuGet packages
+# ======================
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ======================
+# Auto-generated files
+# ======================
+Generated_Code/
+GeneratedFiles/
+*.g.cs
+*.g.i.cs
+
+# ======================
+# Publish artifacts
+# ======================
+*.publish.xml
+AppPackages/
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+
+# ======================
+# Others
+# ======================
+*.tmp
+*.bak
+*.orig
+*.sln.docstates
+*.DotSettings.user
+TestResults/
+*.db
+
+# ======================
+# Local config
+# ======================
+appsettings.*.json
+secrets.json
+
+# ======================
+# Docker
+# ======================
+**/Dockerfile
+**/docker-compose.yml
+docker-compose.override.yml
+
+# ======================
+# Logs
+# ======================
+*.log
+
+# ======================
+# OS-generated
+# ======================
+.DS_Store
+Thumbs.db
+desktop.ini
+
