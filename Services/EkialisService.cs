@@ -293,5 +293,220 @@ namespace API_Ekialis_Excel.Services
             // Cette méthode n'est plus utilisée avec l'approche dynamique
             return new List<ComponentFlat>();
         }
+
+        public async Task<bool> AddItemToEkialisAsync(string nomLogiciel, Dictionary<string, object> champsSharePoint)
+        {
+            try
+            {
+                var apiUrl = "/api/explore/components";
+
+                // Construction de l'objet composant avec les valeurs de base
+                var componentData = new
+                {
+                    name = nomLogiciel,
+                    icon = "flaticon-cd", // Icône par défaut pour les logiciels synchronisés depuis SharePoint
+                    color = "22B14C", // Couleur verte par défaut
+                    componentClass = 1, // 1 = Logiciel
+                    componentStatus = 5, // Valeur par défaut (à adapter selon vos besoins)
+                    company = 1, // Valeur par défaut (à adapter selon votre configuration)
+                    externalId = "string" // Valeur par défaut
+                };
+
+                var jsonContent = JsonConvert.SerializeObject(componentData);
+                Console.WriteLine($"JSON envoyé à Ekialis: {jsonContent}");
+
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync(apiUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Réponse Ekialis: {responseContent}");
+
+                    // Parser la réponse pour récupérer l'ID du composant créé
+                    var createdComponent = JsonConvert.DeserializeObject<dynamic>(responseContent);
+                    var componentId = createdComponent?.id;
+
+                    if (componentId != null)
+                    {
+                        Console.WriteLine($"✅ Logiciel '{nomLogiciel}' créé dans Ekialis avec ID: {componentId}");
+
+                        // Ajouter les caractéristiques si le composant a été créé avec succès
+                        await AddCharacteristicsToComponentAsync((int)componentId, champsSharePoint);
+
+                        return true;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ Composant créé mais impossible de récupérer l'ID");
+                        return false;
+                    }
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"❌ Erreur lors de la création de '{nomLogiciel}': {response.StatusCode}");
+                    Console.WriteLine($"Détail erreur: {errorContent}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Exception lors de la création de '{nomLogiciel}': {ex.Message}");
+                return false;
+            }
+        }
+
+        private async Task<bool> AddCharacteristicsToComponentAsync(int componentId, Dictionary<string, object> champsSharePoint)
+        {
+            try
+            {
+                // Pour chaque champ SharePoint mappé, créer une caractéristique dans Ekialis
+                var caracteristiquesAjoutees = 0;
+
+                foreach (var champ in champsSharePoint)
+                {
+                    // Ignorer le Title qui est déjà le nom du composant
+                    if (champ.Key == "Title") continue;
+
+                    // Récupérer la caractéristique Ekialis correspondante
+                    var caracteristiqueEkialis = FieldMapping.GetEkialisCharacteristic(champ.Key);
+                    if (string.IsNullOrEmpty(caracteristiqueEkialis)) continue;
+
+                    var valeur = champ.Value?.ToString();
+                    if (string.IsNullOrEmpty(valeur)) continue;
+
+                    // Trouver l'ID de la caractéristique dans Ekialis
+                    var characteristics = await GetCharacteristicsAsync();
+                    var characteristic = characteristics.FirstOrDefault(c => c.Name == caracteristiqueEkialis);
+
+                    if (characteristic == null)
+                    {
+                        Console.WriteLine($"⚠️ Caractéristique '{caracteristiqueEkialis}' non trouvée dans Ekialis");
+                        continue;
+                    }
+
+                    // Ajouter la caractéristique au composant
+                    var success = await AddCharacteristicValueAsync(componentId, characteristic.Id, valeur);
+                    if (success)
+                    {
+                        caracteristiquesAjoutees++;
+                        Console.WriteLine($"  ✅ Caractéristique ajoutée: {caracteristiqueEkialis} = {valeur}");
+                    }
+                }
+
+                Console.WriteLine($"📊 {caracteristiquesAjoutees} caractéristiques ajoutées au composant {componentId}");
+                return caracteristiquesAjoutees > 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Erreur lors de l'ajout des caractéristiques: {ex.Message}");
+                return false;
+            }
+        }
+
+        private async Task<bool> AddCharacteristicValueAsync(int componentId, int characteristicId, string value)
+        {
+            try
+            {
+                var apiUrl = "/api/explore/characteristic_values";
+
+                var characteristicValueData = new
+                {
+                    value = value,
+                    component = componentId,
+                    characteristic = characteristicId
+                };
+
+                var jsonContent = JsonConvert.SerializeObject(characteristicValueData);
+                Console.WriteLine($"    JSON caractéristique envoyé: {jsonContent}");
+
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(apiUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"    ✅ Valeur de caractéristique ajoutée avec succès");
+                    return true;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"    ❌ Erreur ajout caractéristique: {response.StatusCode}");
+                    Console.WriteLine($"    Détail: {errorContent}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Exception lors de l'ajout de la valeur de caractéristique: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateCharacteristicValueAsync(int valueId, string newValue, int componentId, int characteristicId)
+        {
+            try
+            {
+                var apiUrl = $"/api/explore/characteristic_values/{valueId}";
+
+                var updateData = new
+                {
+                    value = newValue,
+                    component = componentId,
+                    characteristic = characteristicId
+                };
+
+                var jsonContent = JsonConvert.SerializeObject(updateData);
+                Console.WriteLine($"    JSON mise à jour envoyé: {jsonContent}");
+
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PutAsync(apiUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"    ✅ Valeur de caractéristique mise à jour avec succès");
+                    return true;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"    ❌ Erreur mise à jour caractéristique: {response.StatusCode}");
+                    Console.WriteLine($"    Détail: {errorContent}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Exception lors de la mise à jour de la valeur: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> AddCharacteristicToExistingComponentAsync(int componentId, string characteristicName, string value)
+        {
+            try
+            {
+                // 1. Trouver l'ID de la caractéristique par son nom
+                var characteristics = await GetCharacteristicsAsync();
+                var characteristic = characteristics.FirstOrDefault(c => c.Name == characteristicName);
+
+                if (characteristic == null)
+                {
+                    Console.WriteLine($"    ❌ Caractéristique '{characteristicName}' non trouvée");
+                    return false;
+                }
+
+                // 2. Ajouter la valeur de caractéristique
+                return await AddCharacteristicValueAsync(componentId, characteristic.Id, value);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Exception lors de l'ajout de caractéristique à un composant existant: {ex.Message}");
+                return false;
+            }
+        }
     }
 }

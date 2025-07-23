@@ -81,7 +81,10 @@ namespace API_Ekialis_Excel.Controllers
 
                     logicielsTraites++;
                     var nomAppli = item["name"]?.ToString() ?? "";
-                    Console.WriteLine($"✅ Logiciel trouvé: '{nomAppli}'");
+                    var icon = item["icon"]?.ToString() ?? "";
+                    var color = item["color"]?.ToString() ?? "";
+
+                    Console.WriteLine($"✅ Logiciel trouvé: '{nomAppli}' (icon: {icon}, color: {color})");
 
                     var caracteristiques = new List<string>();
 
@@ -126,6 +129,8 @@ namespace API_Ekialis_Excel.Controllers
                     logiciels.Add(new
                     {
                         NOM_APPLI = nomAppli,
+                        icon = icon,
+                        color = color,
                         caracteristiques
                     });
 
