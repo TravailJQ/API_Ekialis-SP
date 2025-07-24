@@ -1,7 +1,11 @@
 ﻿using API_Ekialis_Excel.Models;
 using API_Ekialis_Excel.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Graph.Models;
 using Newtonsoft.Json.Linq;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
+using System.IO;
 
 namespace API_Ekialis_Excel.Controllers
 {
@@ -475,6 +479,201 @@ namespace API_Ekialis_Excel.Controllers
                 Console.WriteLine($"❌ Erreur lors du marquage: {ex.Message}");
                 return StatusCode(500, $"Erreur lors du marquage: {ex.Message}");
             }
+        }
+
+        [HttpPost("import-excel-vers-sharepoint")]
+        public async Task<IActionResult> ImportExcelVersSharePoint(IFormFile excelFile)
+        {
+            try
+            {
+                if (excelFile == null || excelFile.Length == 0)
+                    return BadRequest("Aucun fichier Excel fourni");
+
+                Console.WriteLine($"📁 Traitement du fichier: {excelFile.FileName} ({excelFile.Length} bytes)");
+
+                // Lecture du fichier Excel
+                using var stream = new MemoryStream();
+                await excelFile.CopyToAsync(stream);
+                var fileBytes = stream.ToArray();
+
+                // Analyse avec la méthode de parsing
+                var logiciels = await ParseExcelFile(fileBytes);
+
+                if (!logiciels.Any())
+                    return BadRequest("Aucune donnée valide trouvée dans le fichier Excel");
+
+                Console.WriteLine($"📋 {logiciels.Count} logiciels trouvés dans le fichier Excel");
+
+                // Ajout vers SharePoint
+                var ajoutsReussis = 0;
+                var ajoutsEchecs = 0;
+                var erreursDetaillees = new List<string>();
+
+                foreach (var logiciel in logiciels)
+                {
+                    var nomLogiciel = logiciel.ContainsKey("Title") ? logiciel["Title"]?.ToString() ?? "" : "";
+
+                    if (string.IsNullOrEmpty(nomLogiciel))
+                    {
+                        ajoutsEchecs++;
+                        erreursDetaillees.Add("Ligne ignorée: APPLICATION vide");
+                        continue;
+                    }
+
+                    Console.WriteLine($"📤 Ajout de '{nomLogiciel}' dans SharePoint...");
+
+                    // Conversion en format attendu par SharePoint
+                    var champsSharePoint = new Dictionary<string, string>();
+                    foreach (var champ in logiciel)
+                    {
+                        if (champ.Key != "Title" && champ.Value != null && !string.IsNullOrEmpty(champ.Value.ToString()))
+                        {
+                            champsSharePoint[champ.Key] = champ.Value.ToString();
+                            Console.WriteLine($"  📝 Champ mappé: {champ.Key} = '{champ.Value}'");
+                        }
+                    }
+
+                    Console.WriteLine($"  📊 {champsSharePoint.Count} champs à synchroniser pour '{nomLogiciel}'");
+
+                    var success = await _sharePointService.AddItemToSharePointAsync(nomLogiciel, champsSharePoint);
+
+                    if (success)
+                    {
+                        ajoutsReussis++;
+                        Console.WriteLine($"  ✅ '{nomLogiciel}' ajouté avec succès");
+                    }
+                    else
+                    {
+                        ajoutsEchecs++;
+                        erreursDetaillees.Add($"Échec de l'ajout: {nomLogiciel}");
+                        Console.WriteLine($"  ❌ Échec de l'ajout de '{nomLogiciel}'");
+                    }
+                }
+
+                var response = new
+                {
+                    message = "Import Excel vers SharePoint terminé",
+                    fichier = excelFile.FileName,
+                    totalLignes = logiciels.Count,
+                    ajoutsReussis,
+                    ajoutsEchecs,
+                    erreursDetaillees
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Erreur lors de l'import Excel: {ex.Message}");
+                return StatusCode(500, $"Erreur lors de l'import Excel: {ex.Message}");
+            }
+        }
+
+        private async Task<List<Dictionary<string, object>>> ParseExcelFile(byte[] fileBytes)
+        {
+            var logiciels = new List<Dictionary<string, object>>();
+
+            try
+            {
+                // Mapping des colonnes Excel vers les champs SharePoint
+                var columnMapping = new Dictionary<string, string>
+        {
+            { "APPLICATION", "Title" },
+            { "APPLICATION ", "Title" }, // Avec espace
+            { "FOURNISSEUR", "field_6" },
+            { "SERVICE/ENTITE", "field_1" },
+            { "ROLE", "field_3" },
+            { "PRIX", "field_9" },
+            { "Référent NGE", "field_2" },
+            { "Contact Commercial - Nom, Prénom", "field_13" },
+            { "Contact Commercial - Téléphone", "field_15" },
+            { "Contact Commercial - Mail", "field_14" },
+            { "LIEN EDITEUR (Présentation Solution)", "field_25" },
+            { "Pérénité Solution", "field_27" }
+        };
+
+                using (var stream = new MemoryStream(fileBytes))
+                using (var document = SpreadsheetDocument.Open(stream, false))
+                {
+                    var workbookPart = document.WorkbookPart;
+                    var worksheetPart = workbookPart.WorksheetParts.First();
+                    var worksheet = worksheetPart.Worksheet;
+                    var sheetData = worksheet.GetFirstChild<SheetData>();
+                    var stringTable = workbookPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
+
+                    var rows = sheetData.Descendants<Row>().ToList();
+                    if (!rows.Any()) return logiciels;
+
+                    // Récupérer les en-têtes (première ligne)
+                    var headerRow = rows[0];
+                    var headers = new Dictionary<int, string>();
+                    int colIndex = 0;
+
+                    foreach (Cell cell in headerRow.Descendants<Cell>())
+                    {
+                        var cellValue = GetCellValue(cell, stringTable);
+                        if (!string.IsNullOrEmpty(cellValue))
+                        {
+                            headers[colIndex] = cellValue.Trim();
+                        }
+                        colIndex++;
+                    }
+
+                    // Traiter les lignes de données (à partir de la ligne 2)
+                    for (int i = 1; i < rows.Count; i++)
+                    {
+                        var row = rows[i];
+                        var logiciel = new Dictionary<string, object>();
+                        bool hasData = false;
+                        colIndex = 0;
+
+                        foreach (Cell cell in row.Descendants<Cell>())
+                        {
+                            var cellValue = GetCellValue(cell, stringTable);
+
+                            if (headers.ContainsKey(colIndex) && columnMapping.ContainsKey(headers[colIndex]))
+                            {
+                                var sharePointField = columnMapping[headers[colIndex]];
+                                logiciel[sharePointField] = cellValue?.Trim() ?? "";
+
+                                if (!string.IsNullOrEmpty(cellValue))
+                                    hasData = true;
+                            }
+                            colIndex++;
+                        }
+
+                        if (hasData && logiciel.ContainsKey("Title") && !string.IsNullOrEmpty(logiciel["Title"]?.ToString()))
+                        {
+                            logiciels.Add(logiciel);
+                        }
+                    }
+                }
+
+                Console.WriteLine($"📊 Parsing terminé: {logiciels.Count} logiciels extraits");
+                return logiciels;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Erreur de parsing Excel: {ex.Message}");
+                throw;
+            }
+        }
+
+        private string GetCellValue(Cell cell, SharedStringTablePart stringTable)
+        {
+            if (cell.CellValue == null) return "";
+
+            var value = cell.CellValue.InnerXml;
+
+            if (cell.DataType != null && cell.DataType.Value == CellValues.SharedString)
+            {
+                if (stringTable != null && int.TryParse(value, out int index))
+                {
+                    return stringTable.SharedStringTable.ChildElements[index].InnerText;
+                }
+            }
+
+            return value;
         }
     }
 }

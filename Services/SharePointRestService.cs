@@ -158,14 +158,15 @@ namespace API_Ekialis_Excel.Services
                 expandoObject["__metadata"] = new { type = listItemType };
                 expandoObject["Title"] = nomLogiciel;
 
-                // Ajout des caractéristiques mappées
+                Console.WriteLine($"📝 Ajout des champs pour '{nomLogiciel}':");
+
+                // Ajout direct des champs (pas de mapping car on a déjà les bons noms)
                 foreach (var caract in caracteristiques)
                 {
-                    var sharePointField = FieldMapping.GetSharePointField(caract.Key);
-                    if (!string.IsNullOrEmpty(sharePointField))
+                    if (!string.IsNullOrEmpty(caract.Key) && !string.IsNullOrEmpty(caract.Value))
                     {
-                        expandoObject[sharePointField] = caract.Value;
-                        Console.WriteLine($"  Mapping: {caract.Key} -> {sharePointField} = {caract.Value}");
+                        expandoObject[caract.Key] = caract.Value;
+                        Console.WriteLine($"  ✅ Champ direct: {caract.Key} = {caract.Value}");
                     }
                 }
 

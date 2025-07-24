@@ -39,12 +39,15 @@ namespace API_Ekialis_Excel.Services
         {
             try
             {
-                _logger.LogInformation("🔄 Début de la synchronisation automatique - {Time}", DateTime.Now);
+                _logger.LogInformation("🚀 DÉBUT DE LA SYNCHRONISATION AUTOMATIQUE - {Time}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 await PerformSynchronizationAsync();
+                _logger.LogInformation("✅ FIN DE LA SYNCHRONISATION AUTOMATIQUE - {Time}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                _logger.LogInformation("⏳ EN ATTENTE - Prochaine synchronisation prévue à {NextTime}", DateTime.Now.AddHours(1).ToString("yyyy-MM-dd HH:mm:ss"));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "❌ Erreur lors de la synchronisation automatique");
+                _logger.LogInformation("⏳ EN ATTENTE - Prochaine synchronisation prévue à {NextTime}", DateTime.Now.AddHours(1).ToString("yyyy-MM-dd HH:mm:ss"));
             }
         }
 
