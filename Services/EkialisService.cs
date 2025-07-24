@@ -446,7 +446,7 @@ namespace API_Ekialis_Excel.Services
             }
         }
 
-        public async Task<bool> UpdateCharacteristicValueAsync(int valueId, string newValue, int componentId, int characteristicId)
+        public async Task<bool> UpdateExistingCharacteristicValueAsync(int valueId, string newValue, int componentId, int characteristicId)
         {
             try
             {
@@ -485,7 +485,62 @@ namespace API_Ekialis_Excel.Services
             }
         }
 
-        public async Task<bool> AddCharacteristicToExistingComponentAsync(int componentId, string characteristicName, string value)
+        public async Task<bool> UpdateComponentColorAsync(int componentId, string newColor)
+        {
+            try
+            {
+                var apiUrl = $"/api/explore/components/{componentId}";
+
+                // Récupérer d'abord les données actuelles du composant
+                var getResponse = await _httpClient.GetAsync(apiUrl);
+                if (!getResponse.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"❌ Impossible de récupérer le composant {componentId}");
+                    return false;
+                }
+
+                var currentData = await getResponse.Content.ReadAsStringAsync();
+                var componentJson = JObject.Parse(currentData);
+
+                // Construire l'objet de mise à jour avec toutes les propriétés requises
+                var updateData = new
+                {
+                    name = componentJson["name"]?.ToString() ?? "",
+                    icon = componentJson["icon"]?.ToString() ?? "",
+                    color = newColor, // Seule propriété modifiée
+                    componentClass = componentJson["componentClass"]?["id"]?.ToObject<int>() ?? 1,
+                    componentStatus = componentJson["componentStatus"]?["id"]?.ToObject<int>() ?? 5,
+                    company = componentJson["company"]?["id"]?.ToObject<int>() ?? 1,
+                    externalId = componentJson["externalId"]?.ToString() ?? ""
+                };
+
+                var jsonContent = JsonConvert.SerializeObject(updateData);
+                Console.WriteLine($"    JSON mise à jour couleur: {jsonContent}");
+
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PutAsync(apiUrl, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"    ✅ Couleur du composant mise à jour avec succès");
+                    return true;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"    ❌ Erreur mise à jour couleur: {response.StatusCode}");
+                    Console.WriteLine($"    Détail: {errorContent}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Exception lors de la mise à jour de la couleur: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> AddCharacteristicToComponentAsync(int componentId, string characteristicName, string value)
         {
             try
             {

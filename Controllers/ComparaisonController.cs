@@ -430,7 +430,7 @@ namespace API_Ekialis_Excel.Controllers
                             if (valeurEkialis != valeurSharePoint)
                             {
                                 Console.WriteLine($"    📝 Mise à jour: '{valeurEkialis}' → '{valeurSharePoint}'");
-                                var success = await ekialisService.UpdateCharacteristicValueAsync(valueId, valeurSharePoint, componentId, characteristicId);
+                                var success = await ekialisService.UpdateExistingCharacteristicValueAsync(valueId, valeurSharePoint, componentId, characteristicId);
                                 if (success)
                                     caracteristiquesModifiees++;
                                 else
@@ -445,7 +445,7 @@ namespace API_Ekialis_Excel.Controllers
                         {
                             // Caractéristique n'existe pas dans Ekialis - la créer
                             Console.WriteLine($"    ➕ Création de nouvelle valeur de caractéristique");
-                            var success = await ekialisService.AddCharacteristicToExistingComponentAsync(componentId, nomCaracteristique, valeurSharePoint);
+                            var success = await ekialisService.AddCharacteristicToComponentAsync(componentId, nomCaracteristique, valeurSharePoint);
                             if (success)
                                 caracteristiquesAjoutees++;
                             else
@@ -476,6 +476,201 @@ namespace API_Ekialis_Excel.Controllers
                 Console.WriteLine($"❌ Erreur lors de la synchronisation des caractéristiques: {ex.Message}");
                 return StatusCode(500, $"Erreur lors de la synchronisation: {ex.Message}");
             }
+        }
+
+
+        [HttpPost("marquer-obsoletes-rouge")]
+        public async Task<IActionResult> MarquerObsoletesRouge()
+        {
+            try
+            {
+                using var httpClient = new HttpClient();
+                var ekialisService = new EkialisService(httpClient, _configuration);
+
+                var authSuccess = await ekialisService.AuthenticateAsync();
+                if (!authSuccess)
+                    return Unauthorized("Échec de l'authentification Ekialis");
+
+                Console.WriteLine("🔴 Début du marquage des logiciels obsolètes en rouge...");
+
+                // 1. Récupération des logiciels SharePoint (source de vérité)
+                var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
+                var nomsSharePoint = itemsSharePoint
+                    .Where(i => i.ContainsKey("Title"))
+                    .Select(i => i["Title"]?.ToString()?.Trim().ToLower())
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .ToHashSet();
+
+                Console.WriteLine($"📋 Logiciels dans SharePoint: {nomsSharePoint.Count}");
+
+                // 2. Récupération des logiciels Ekialis
+                var rawJson = await ekialisService.GetComponentsRawJsonAsync();
+                var jArray = JArray.Parse(rawJson);
+
+                var logicielsEkialis = new List<(int id, string name, string currentColor)>();
+
+                foreach (var item in jArray)
+                {
+                    var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
+                    if (componentClassId != "1") continue;
+
+                    var id = item["id"]?.ToObject<int>() ?? 0;
+                    var name = item["name"]?.ToString()?.Trim() ?? "";
+                    var color = item["color"]?.ToString() ?? "";
+
+                    if (id > 0 && !string.IsNullOrEmpty(name))
+                    {
+                        logicielsEkialis.Add((id, name, color));
+                    }
+                }
+
+                Console.WriteLine($"📋 Logiciels dans Ekialis: {logicielsEkialis.Count}");
+
+                // 3. Identification des logiciels obsolètes (dans Ekialis mais pas dans SharePoint)
+                var logicielsObsoletes = logicielsEkialis
+                    .Where(logiciel => !nomsSharePoint.Contains(logiciel.name.ToLower()))
+                    .ToList();
+
+                Console.WriteLine($"🔍 Logiciels obsolètes trouvés: {logicielsObsoletes.Count}");
+
+                // 4. Marquage en rouge des logiciels obsolètes
+                var marquagesReussis = 0;
+                var marquagesEchecs = 0;
+
+                foreach (var logicielObsolete in logicielsObsoletes)
+                {
+                    Console.WriteLine($"🔴 Marquage de '{logicielObsolete.name}' (ID: {logicielObsolete.id})");
+
+                    // Vérifier si déjà rouge pour éviter les appels inutiles
+                    if (logicielObsolete.currentColor.ToUpper() == "FF0000")
+                    {
+                        Console.WriteLine($"  ✅ Déjà marqué en rouge, ignoré");
+                        marquagesReussis++;
+                        continue;
+                    }
+
+                    var success = await ekialisService.UpdateComponentColorAsync(logicielObsolete.id, "FF0000");
+
+                    if (success)
+                    {
+                        marquagesReussis++;
+                        Console.WriteLine($"  ✅ Marqué en rouge avec succès");
+                    }
+                    else
+                    {
+                        marquagesEchecs++;
+                        Console.WriteLine($"  ❌ Échec du marquage");
+                    }
+                }
+
+                var response = new
+                {
+                    totalEkialis = logicielsEkialis.Count,
+                    totalSharePoint = nomsSharePoint.Count,
+                    logicielsObsoletes = logicielsObsoletes.Count,
+                    marquagesReussis,
+                    marquagesEchecs,
+                    logicielsMarques = logicielsObsoletes.Select(l => new
+                    {
+                        id = l.id,
+                        nom = l.name,
+                        ancienneCouleur = l.currentColor,
+                        nouvelleCouleur = "FF0000"
+                    }).ToList()
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Erreur lors du marquage: {ex.Message}");
+                return StatusCode(500, $"Erreur lors du marquage: {ex.Message}");
+            }
+        }
+
+        [HttpPost("demarrer-synchronisation-automatique")]
+        public IActionResult DemarrerSynchronisationAutomatique()
+        {
+            // Le service background se démarre automatiquement avec l'application
+            return Ok(new { message = "La synchronisation automatique est active et s'exécute toutes les heures" });
+        }
+
+        [HttpPost("synchronisation-manuelle-complete")]
+        public async Task<IActionResult> SynchronisationManuelleComplete()
+        {
+            try
+            {
+                using var httpClient = new HttpClient();
+                var ekialisService = new EkialisService(httpClient, _configuration);
+
+                var authSuccess = await ekialisService.AuthenticateAsync();
+                if (!authSuccess)
+                    return Unauthorized("Échec de l'authentification Ekialis");
+
+                Console.WriteLine("🚀 Début de la synchronisation manuelle complète...");
+
+                // 1. SharePoint → Ekialis
+                Console.WriteLine("\n📥 Phase 1: Ajout des logiciels SharePoint manquants dans Ekialis");
+                var toEkialisResult = await SynchroniserVersEkialis();
+
+                // 2. Ekialis → SharePoint  
+                Console.WriteLine("\n📤 Phase 2: Ajout des logiciels Ekialis manquants dans SharePoint");
+                var toSharePointResult = await SynchroniserVersSharePoint();
+
+                // 3. Mise à jour des caractéristiques
+                Console.WriteLine("\n🔄 Phase 3: Mise à jour des caractéristiques");
+                var caracteristiquesResult = await SynchroniserCaracteristiques();
+
+                // 4. Marquage des obsolètes
+                Console.WriteLine("\n🔴 Phase 4: Marquage des logiciels obsolètes en rouge");
+                var marquageResult = await MarquerObsoletesRouge();
+
+                var response = new
+                {
+                    message = "Synchronisation manuelle complète terminée",
+                    timestamp = DateTime.Now,
+                    phases = new
+                    {
+                        versEkialis = toEkialisResult,
+                        versSharePoint = toSharePointResult,
+                        caracteristiques = caracteristiquesResult,
+                        marquageObsoletes = marquageResult
+                    }
+                };
+
+                Console.WriteLine("✅ Synchronisation manuelle complète terminée avec succès");
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Erreur lors de la synchronisation manuelle complète: {ex.Message}");
+                return StatusCode(500, $"Erreur lors de la synchronisation: {ex.Message}");
+            }
+        }
+
+        [HttpGet("status-synchronisation")]
+        public IActionResult GetStatusSynchronisation()
+        {
+            var status = new
+            {
+                synchronisationAutomatique = new
+                {
+                    active = true,
+                    frequence = "Toutes les heures",
+                    prochaineLancement = DateTime.Now.AddHours(1).ToString("yyyy-MM-dd HH:mm:ss")
+                },
+                endpointsDisponibles = new[]
+                {
+            "POST /api/Comparaison/synchronisation-manuelle-complete - Lance une synchronisation complète immédiate",
+            "POST /api/Comparaison/synchroniser-vers-sharepoint - Ajoute les logiciels Ekialis manquants dans SharePoint",
+            "POST /api/Comparaison/synchroniser-vers-ekialis - Ajoute les logiciels SharePoint manquants dans Ekialis",
+            "POST /api/Comparaison/synchroniser-caracteristiques - Met à jour les caractéristiques",
+            "POST /api/Comparaison/marquer-obsoletes-rouge - Marque les logiciels obsolètes en rouge",
+            "GET /api/Comparaison/logiciels - Compare les deux listes"
+        }
+            };
+
+            return Ok(status);
         }
     }
 }

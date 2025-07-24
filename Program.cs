@@ -12,6 +12,9 @@ builder.Services.AddScoped<ExportService>();
 // Enregistrement du service SharePoint
 builder.Services.AddScoped<SharePointRestService>(); // Utilise HttpClient dans le service, pas via DI directe
 
+// SERVICE BACKGROUND pour la synchronisation automatique
+builder.Services.AddHostedService<SynchronizationBackgroundService>();
+
 // Swagger / OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -26,9 +29,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
