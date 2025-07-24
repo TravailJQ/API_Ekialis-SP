@@ -583,7 +583,7 @@ namespace API_Ekialis_Excel.Controllers
             { "FOURNISSEUR", "field_6" },
             { "SERVICE/ENTITE", "field_1" },
             { "ROLE", "field_3" },
-            { "PRIX", "field_9" },
+            { "PRIX", "field_8" },
             { "Référent NGE", "field_2" },
             { "Contact Commercial - Nom, Prénom", "field_13" },
             { "Contact Commercial - Téléphone", "field_15" },

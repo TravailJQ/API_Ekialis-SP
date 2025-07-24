@@ -300,6 +300,9 @@ namespace API_Ekialis_Excel.Services
             {
                 var apiUrl = "/api/explore/components";
 
+                // Générer un externalId unique basé sur le nom + timestamp
+                var externalId = $"SP_{nomLogiciel}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+
                 // Construction de l'objet composant avec les valeurs de base
                 var componentData = new
                 {
@@ -309,7 +312,7 @@ namespace API_Ekialis_Excel.Services
                     componentClass = 1, // 1 = Logiciel
                     componentStatus = 5, // Valeur par défaut (à adapter selon vos besoins)
                     company = 1, // Valeur par défaut (à adapter selon votre configuration)
-                    externalId = "string" // Valeur par défaut
+                    externalId = externalId // ID unique généré
                 };
 
                 var jsonContent = JsonConvert.SerializeObject(componentData);
@@ -330,7 +333,7 @@ namespace API_Ekialis_Excel.Services
 
                     if (componentId != null)
                     {
-                        Console.WriteLine($"✅ Logiciel '{nomLogiciel}' créé dans Ekialis avec ID: {componentId}");
+                        Console.WriteLine($"✅ Logiciel '{nomLogiciel}' créé dans Ekialis avec ID: {componentId} et externalId: {externalId}");
 
                         // Ajouter les caractéristiques si le composant a été créé avec succès
                         await AddCharacteristicsToComponentAsync((int)componentId, champsSharePoint);
