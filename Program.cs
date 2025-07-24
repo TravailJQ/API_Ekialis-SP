@@ -7,8 +7,6 @@ builder.Services.AddControllers();
 
 // Enregistrement des services personnalisés
 builder.Services.AddHttpClient<EkialisService>();
-builder.Services.AddScoped<ExportService>();
-
 // Enregistrement du service SharePoint
 builder.Services.AddScoped<SharePointRestService>(); // Utilise HttpClient dans le service, pas via DI directe
 

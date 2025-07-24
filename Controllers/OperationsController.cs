@@ -7,19 +7,19 @@ namespace API_Ekialis_Excel.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ComparaisonController : ControllerBase
+    public class OperationsController : ControllerBase
     {
         private readonly SharePointRestService _sharePointService;
         private readonly IConfiguration _configuration;
 
-        public ComparaisonController(SharePointRestService sharePointService, IConfiguration configuration)
+        public OperationsController(SharePointRestService sharePointService, IConfiguration configuration)
         {
             _sharePointService = sharePointService;
             _configuration = configuration;
         }
 
-        [HttpGet("logiciels")]
-        public async Task<IActionResult> ComparerLogiciels()
+        [HttpPost("sharepoint-vers-ekialis")]
+        public async Task<IActionResult> SharePointVersEkialis()
         {
             try
             {
@@ -30,51 +30,94 @@ namespace API_Ekialis_Excel.Controllers
                 if (!authSuccess)
                     return Unauthorized("Échec de l'authentification Ekialis");
 
-                // Liste des logiciels Ekialis
-                var logicielsEkialis = await ekialisService.GetSoftwareComponentsFlatAsync();
-                var nomsEkialis = logicielsEkialis
-                    .Select(l => l.Name?.Trim().ToLower())
-                    .Where(n => !string.IsNullOrEmpty(n))
-                    .Distinct()
-                    .OrderBy(n => n)
-                    .ToList();
+                // 1. Récupération des logiciels Ekialis (noms uniquement)
+                var rawJson = await ekialisService.GetComponentsRawJsonAsync();
+                var jArray = JArray.Parse(rawJson);
 
-                // Liste SharePoint (on suppose que SharePoint:Fields = Title dans appsettings)
+                var nomsEkialis = new HashSet<string>();
+                foreach (var item in jArray)
+                {
+                    var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
+                    if (componentClassId != "1") continue;
+
+                    var nomAppli = item["name"]?.ToString()?.Trim() ?? "";
+                    if (!string.IsNullOrEmpty(nomAppli))
+                    {
+                        nomsEkialis.Add(nomAppli.ToLower());
+                    }
+                }
+
+                // 2. Récupération des logiciels SharePoint avec tous leurs champs
                 var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
-                var nomsSharePoint = itemsSharePoint
-                    .Where(i => i.ContainsKey("Title"))
-                    .Select(i => i["Title"]?.ToString()?.Trim().ToLower())
-                    .Where(n => !string.IsNullOrEmpty(n))
-                    .Distinct()
-                    .OrderBy(n => n)
+                var logicielsSharePoint = new List<Dictionary<string, object>>();
+
+                foreach (var item in itemsSharePoint)
+                {
+                    if (item.ContainsKey("Title"))
+                    {
+                        var title = item["Title"]?.ToString()?.Trim() ?? "";
+                        if (!string.IsNullOrEmpty(title))
+                        {
+                            var logiciel = new Dictionary<string, object>();
+                            foreach (var field in item)
+                            {
+                                logiciel[field.Key] = field.Value ?? "";
+                            }
+                            logicielsSharePoint.Add(logiciel);
+                        }
+                    }
+                }
+
+                // 3. Identification des logiciels manquants dans Ekialis
+                var logicielsManquants = logicielsSharePoint
+                    .Where(logiciel => !nomsEkialis.Contains(logiciel["Title"].ToString()?.ToLower() ?? ""))
                     .ToList();
 
-                // Comparaison
-                var manquantsDansSharePoint = nomsEkialis.Except(nomsSharePoint).ToList();
-                var manquantsDansEkialis = nomsSharePoint.Except(nomsEkialis).ToList();
+                Console.WriteLine($"🔍 Logiciels manquants dans Ekialis: {logicielsManquants.Count}");
+
+                // 4. Ajout des logiciels manquants dans Ekialis
+                var ajoutsReussis = 0;
+                var ajoutsEchecs = 0;
+
+                foreach (var logicielManquant in logicielsManquants)
+                {
+                    var nomLogiciel = logicielManquant["Title"].ToString() ?? "";
+                    Console.WriteLine($"🔄 Ajout de '{nomLogiciel}' dans Ekialis...");
+
+                    var success = await ekialisService.AddItemToEkialisAsync(nomLogiciel, logicielManquant);
+
+                    if (success)
+                        ajoutsReussis++;
+                    else
+                        ajoutsEchecs++;
+                }
 
                 var response = new
                 {
+                    totalSharePoint = logicielsSharePoint.Count,
                     totalEkialis = nomsEkialis.Count,
-                    totalSharePoint = nomsSharePoint.Count,
-                    identiques = nomsEkialis.Intersect(nomsSharePoint).Count(),
-                    differences = new
+                    logicielsManquants = logicielsManquants.Count,
+                    ajoutsReussis,
+                    ajoutsEchecs,
+                    logicielsAjoutes = logicielsManquants.Select(logiciel => new
                     {
-                        dansEkialisPasDansSharePoint = manquantsDansSharePoint,
-                        dansSharePointPasDansEkialis = manquantsDansEkialis
-                    }
+                        nom = logiciel["Title"].ToString(),
+                        champs = logiciel.Where(kvp => kvp.Key != "Title")
+                                      .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                    }).ToList()
                 };
 
                 return Ok(response);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Erreur lors de la comparaison : {ex.Message}");
+                Console.WriteLine($"❌ Erreur lors de la synchronisation vers Ekialis: {ex.Message}");
+                return StatusCode(500, $"Erreur lors de la synchronisation vers Ekialis: {ex.Message}");
             }
         }
 
-        [HttpPost("synchroniser-vers-sharepoint")]
-        public async Task<IActionResult> SynchroniserVersSharePoint()
+        [HttpPost("ekialis-vers-sharepoint")]
+        public async Task<IActionResult> EkialisVersSharePoint()
         {
             try
             {
@@ -86,9 +129,6 @@ namespace API_Ekialis_Excel.Controllers
                     return Unauthorized("Échec de l'authentification Ekialis");
 
                 // 1. Récupération des logiciels Ekialis avec caractéristiques
-                var characteristics = await ekialisService.GetCharacteristicsAsync();
-                var characDict = characteristics.ToDictionary(c => c.Id, c => c.Name);
-
                 var rawJson = await ekialisService.GetComponentsRawJsonAsync();
                 var jArray = JArray.Parse(rawJson);
 
@@ -96,12 +136,7 @@ namespace API_Ekialis_Excel.Controllers
 
                 foreach (var item in jArray)
                 {
-                    var componentClassId = "";
-                    if (item["componentClass"]?["id"] != null)
-                    {
-                        componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
-                    }
-
+                    var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
                     if (componentClassId != "1") continue;
 
                     var nomAppli = item["name"]?.ToString()?.Trim() ?? "";
@@ -118,7 +153,6 @@ namespace API_Ekialis_Excel.Controllers
 
                             if (!string.IsNullOrWhiteSpace(valeur) && !string.IsNullOrWhiteSpace(nomCaracFromJson))
                             {
-                                // Vérifier si cette caractéristique est mappée
                                 if (FieldMapping.IsCharacteristicMapped(nomCaracFromJson))
                                 {
                                     caracteristiques[nomCaracFromJson] = valeur;
@@ -180,141 +214,6 @@ namespace API_Ekialis_Excel.Controllers
             {
                 Console.WriteLine($"❌ Erreur lors de la synchronisation: {ex.Message}");
                 return StatusCode(500, $"Erreur lors de la synchronisation: {ex.Message}");
-            }
-        }
-
-        [HttpPost("synchroniser-vers-ekialis")]
-        public async Task<IActionResult> SynchroniserVersEkialis()
-        {
-            try
-            {
-                using var httpClient = new HttpClient();
-                var ekialisService = new EkialisService(httpClient, _configuration);
-
-                var authSuccess = await ekialisService.AuthenticateAsync();
-                if (!authSuccess)
-                    return Unauthorized("Échec de l'authentification Ekialis");
-
-                // 1. Récupération des logiciels Ekialis (noms uniquement)
-                var rawJson = await ekialisService.GetComponentsRawJsonAsync();
-                var jArray = JArray.Parse(rawJson);
-
-                var nomsEkialis = new HashSet<string>();
-                foreach (var item in jArray)
-                {
-                    var componentClassId = "";
-                    if (item["componentClass"]?["id"] != null)
-                    {
-                        componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
-                    }
-
-                    if (componentClassId != "1") continue;
-
-                    var nomAppli = item["name"]?.ToString()?.Trim() ?? "";
-                    if (!string.IsNullOrEmpty(nomAppli))
-                    {
-                        nomsEkialis.Add(nomAppli.ToLower());
-                    }
-                }
-
-                // 2. Récupération des logiciels SharePoint avec tous leurs champs
-                var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
-                var logicielsSharePoint = new List<Dictionary<string, object>>();
-
-                foreach (var item in itemsSharePoint)
-                {
-                    if (item.ContainsKey("Title"))
-                    {
-                        var title = item["Title"]?.ToString()?.Trim() ?? "";
-                        if (!string.IsNullOrEmpty(title))
-                        {
-                            // Convertir en dictionnaire pour faciliter le traitement
-                            var logiciel = new Dictionary<string, object>();
-                            foreach (var field in item)
-                            {
-                                logiciel[field.Key] = field.Value ?? "";
-                            }
-                            logicielsSharePoint.Add(logiciel);
-                        }
-                    }
-                }
-
-                // 3. Identification des logiciels manquants dans Ekialis
-                var logicielsManquants = logicielsSharePoint
-                    .Where(logiciel => !nomsEkialis.Contains(logiciel["Title"].ToString()?.ToLower() ?? ""))
-                    .ToList();
-
-                Console.WriteLine($"🔍 Logiciels manquants dans Ekialis: {logicielsManquants.Count}");
-
-                // 4. Ajout des logiciels manquants dans Ekialis
-                var ajoutsReussis = 0;
-                var ajoutsEchecs = 0;
-
-                foreach (var logicielManquant in logicielsManquants)
-                {
-                    var nomLogiciel = logicielManquant["Title"].ToString() ?? "";
-                    Console.WriteLine($"🔄 Ajout de '{nomLogiciel}' dans Ekialis...");
-
-                    var success = await ekialisService.AddItemToEkialisAsync(nomLogiciel, logicielManquant);
-
-                    if (success)
-                        ajoutsReussis++;
-                    else
-                        ajoutsEchecs++;
-                }
-
-                var response = new
-                {
-                    totalSharePoint = logicielsSharePoint.Count,
-                    totalEkialis = nomsEkialis.Count,
-                    logicielsManquants = logicielsManquants.Count,
-                    ajoutsReussis,
-                    ajoutsEchecs,
-                    logicielsAjoutes = logicielsManquants.Select(logiciel => new
-                    {
-                        nom = logiciel["Title"].ToString(),
-                        champs = logiciel.Where(kvp => kvp.Key != "Title")
-                                      .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
-                    }).ToList()
-                };
-
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Erreur lors de la synchronisation vers Ekialis: {ex.Message}");
-                return StatusCode(500, $"Erreur lors de la synchronisation vers Ekialis: {ex.Message}");
-            }
-        }
-
-        [HttpPost("synchronisation-bidirectionnelle")]
-        public async Task<IActionResult> SynchronisationBidirectionnelle()
-        {
-            try
-            {
-                Console.WriteLine("🚀 Démarrage de la synchronisation bidirectionnelle...");
-
-                // 1. SharePoint vers Ekialis (SharePoint = source de vérité)
-                Console.WriteLine("\n📥 Phase 1: Ajout des logiciels manquants dans Ekialis");
-                var toEkialisResult = await SynchroniserVersEkialis();
-
-                // 2. Ekialis vers SharePoint (nouveaux logiciels créés dans Ekialis)
-                Console.WriteLine("\n📤 Phase 2: Ajout des nouveaux logiciels d'Ekialis dans SharePoint");
-                var toSharePointResult = await SynchroniserVersSharePoint();
-
-                var response = new
-                {
-                    message = "Synchronisation bidirectionnelle terminée",
-                    versEkialis = toEkialisResult,
-                    versSharePoint = toSharePointResult
-                };
-
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Erreur lors de la synchronisation bidirectionnelle: {ex.Message}");
-                return StatusCode(500, $"Erreur lors de la synchronisation bidirectionnelle: {ex.Message}");
             }
         }
 
@@ -424,7 +323,6 @@ namespace API_Ekialis_Excel.Controllers
 
                         if (caracteristiquesEkialis.ContainsKey(nomCaracteristique))
                         {
-                            // Caractéristique existe dans Ekialis - vérifier si mise à jour nécessaire
                             var (valueId, valeurEkialis, characteristicId) = caracteristiquesEkialis[nomCaracteristique];
 
                             if (valeurEkialis != valeurSharePoint)
@@ -443,7 +341,6 @@ namespace API_Ekialis_Excel.Controllers
                         }
                         else
                         {
-                            // Caractéristique n'existe pas dans Ekialis - la créer
                             Console.WriteLine($"    ➕ Création de nouvelle valeur de caractéristique");
                             var success = await ekialisService.AddCharacteristicToComponentAsync(componentId, nomCaracteristique, valeurSharePoint);
                             if (success)
@@ -459,14 +356,7 @@ namespace API_Ekialis_Excel.Controllers
                     logicielsCommuns = logicielsCommuns.Count,
                     caracteristiquesModifiees,
                     caracteristiquesAjoutees,
-                    erreurs,
-                    details = logicielsCommuns.Select(nom => new
-                    {
-                        nom,
-                        componentId = logicielsEkialis[nom].id,
-                        caracteristiquesEkialis = logicielsEkialis[nom].characteristics.Count,
-                        champsSharePoint = logicielsSharePoint[nom].Count
-                    }).ToList()
+                    erreurs
                 };
 
                 return Ok(response);
@@ -477,7 +367,6 @@ namespace API_Ekialis_Excel.Controllers
                 return StatusCode(500, $"Erreur lors de la synchronisation: {ex.Message}");
             }
         }
-
 
         [HttpPost("marquer-obsoletes-rouge")]
         public async Task<IActionResult> MarquerObsoletesRouge()
@@ -587,92 +476,5 @@ namespace API_Ekialis_Excel.Controllers
                 return StatusCode(500, $"Erreur lors du marquage: {ex.Message}");
             }
         }
-
-        [HttpPost("demarrer-synchronisation-automatique")]
-        public IActionResult DemarrerSynchronisationAutomatique()
-        {
-            // Le service background se démarre automatiquement avec l'application
-            return Ok(new { message = "La synchronisation automatique est active et s'exécute toutes les heures" });
-        }
-
-        [HttpPost("synchronisation-manuelle-complete")]
-        public async Task<IActionResult> SynchronisationManuelleComplete()
-        {
-            try
-            {
-                using var httpClient = new HttpClient();
-                var ekialisService = new EkialisService(httpClient, _configuration);
-
-                var authSuccess = await ekialisService.AuthenticateAsync();
-                if (!authSuccess)
-                    return Unauthorized("Échec de l'authentification Ekialis");
-
-                Console.WriteLine("🚀 Début de la synchronisation manuelle complète...");
-
-                // 1. SharePoint → Ekialis
-                Console.WriteLine("\n📥 Phase 1: Ajout des logiciels SharePoint manquants dans Ekialis");
-                var toEkialisResult = await SynchroniserVersEkialis();
-
-                // 2. Ekialis → SharePoint  
-                Console.WriteLine("\n📤 Phase 2: Ajout des logiciels Ekialis manquants dans SharePoint");
-                var toSharePointResult = await SynchroniserVersSharePoint();
-
-                // 3. Mise à jour des caractéristiques
-                Console.WriteLine("\n🔄 Phase 3: Mise à jour des caractéristiques");
-                var caracteristiquesResult = await SynchroniserCaracteristiques();
-
-                // 4. Marquage des obsolètes
-                Console.WriteLine("\n🔴 Phase 4: Marquage des logiciels obsolètes en rouge");
-                var marquageResult = await MarquerObsoletesRouge();
-
-                var response = new
-                {
-                    message = "Synchronisation manuelle complète terminée",
-                    timestamp = DateTime.Now,
-                    phases = new
-                    {
-                        versEkialis = toEkialisResult,
-                        versSharePoint = toSharePointResult,
-                        caracteristiques = caracteristiquesResult,
-                        marquageObsoletes = marquageResult
-                    }
-                };
-
-                Console.WriteLine("✅ Synchronisation manuelle complète terminée avec succès");
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Erreur lors de la synchronisation manuelle complète: {ex.Message}");
-                return StatusCode(500, $"Erreur lors de la synchronisation: {ex.Message}");
-            }
-        }
-
-        [HttpGet("status-synchronisation")]
-        public IActionResult GetStatusSynchronisation()
-        {
-            var status = new
-            {
-                synchronisationAutomatique = new
-                {
-                    active = true,
-                    frequence = "Toutes les heures",
-                    prochaineLancement = DateTime.Now.AddHours(1).ToString("yyyy-MM-dd HH:mm:ss")
-                },
-                endpointsDisponibles = new[]
-                {
-            "POST /api/Comparaison/synchronisation-manuelle-complete - Lance une synchronisation complète immédiate",
-            "POST /api/Comparaison/synchroniser-vers-sharepoint - Ajoute les logiciels Ekialis manquants dans SharePoint",
-            "POST /api/Comparaison/synchroniser-vers-ekialis - Ajoute les logiciels SharePoint manquants dans Ekialis",
-            "POST /api/Comparaison/synchroniser-caracteristiques - Met à jour les caractéristiques",
-            "POST /api/Comparaison/marquer-obsoletes-rouge - Marque les logiciels obsolètes en rouge",
-            "GET /api/Comparaison/logiciels - Compare les deux listes"
-        }
-            };
-
-            return Ok(status);
-        }
     }
 }
-
-

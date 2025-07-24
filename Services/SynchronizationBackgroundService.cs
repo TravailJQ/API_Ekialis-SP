@@ -1,5 +1,6 @@
-﻿using API_Ekialis_Excel.Controllers;
+﻿using API_Ekialis_Excel.Models;
 using API_Ekialis_Excel.Services;
+using Newtonsoft.Json.Linq;
 
 namespace API_Ekialis_Excel.Services
 {
@@ -8,6 +9,7 @@ namespace API_Ekialis_Excel.Services
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<SynchronizationBackgroundService> _logger;
         private readonly IConfiguration _configuration;
+        private Timer? _timer;
 
         public SynchronizationBackgroundService(
             IServiceProvider serviceProvider,
@@ -23,27 +25,26 @@ namespace API_Ekialis_Excel.Services
         {
             _logger.LogInformation("🚀 Service de synchronisation automatique démarré");
 
+            // Configuration du timer pour s'exécuter toutes les heures
+            _timer = new Timer(ExecuteSynchronization, null, TimeSpan.Zero, TimeSpan.FromHours(1));
+
+            // Maintenir le service en vie
             while (!stoppingToken.IsCancellationRequested)
             {
-                try
-                {
-                    await PerformSynchronizationAsync();
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+            }
+        }
 
-                    // Attendre 1 heure avant la prochaine synchronisation
-                    await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.LogInformation("Service de synchronisation arrêté");
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "❌ Erreur lors de la synchronisation automatique");
-
-                    // En cas d'erreur, attendre 10 minutes avant de réessayer
-                    await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
-                }
+        private async void ExecuteSynchronization(object? state)
+        {
+            try
+            {
+                _logger.LogInformation("🔄 Début de la synchronisation automatique - {Time}", DateTime.Now);
+                await PerformSynchronizationAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Erreur lors de la synchronisation automatique");
             }
         }
 
@@ -53,8 +54,6 @@ namespace API_Ekialis_Excel.Services
 
             var sharePointService = scope.ServiceProvider.GetRequiredService<SharePointRestService>();
             var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-
-            _logger.LogInformation("🔄 Début de la synchronisation automatique - {Time}", DateTime.Now);
 
             try
             {
@@ -76,18 +75,18 @@ namespace API_Ekialis_Excel.Services
                 var ajoutsEkialis = await SynchroniserVersEkialis(ekialisService, sharePointService);
                 _logger.LogInformation($"✅ Étape 1 terminée: {ajoutsEkialis.reussis} ajouts réussis, {ajoutsEkialis.echecs} échecs");
 
-                // 2. ÉTAPE 2: Mise à jour des caractéristiques (SharePoint écrase Ekialis)
+                // 3. ÉTAPE 2: Mise à jour des caractéristiques (SharePoint écrase Ekialis)
                 _logger.LogInformation("🔄 ÉTAPE 2: Mise à jour des caractéristiques Ekialis selon SharePoint");
                 var miseAJour = await SynchroniserCaracteristiques(ekialisService, sharePointService);
                 _logger.LogInformation($"✅ Étape 2 terminée: {miseAJour.modifiees} modifications, {miseAJour.ajoutees} ajouts, {miseAJour.erreurs} erreurs");
 
-                // 3. ÉTAPE 3: Marquage des logiciels obsolètes en rouge
+                // 4. ÉTAPE 3: Marquage des logiciels obsolètes en rouge
                 _logger.LogInformation("🔴 ÉTAPE 3: Marquage des logiciels obsolètes en rouge");
                 var marquage = await MarquerObsoletesRouge(ekialisService, sharePointService);
                 _logger.LogInformation($"✅ Étape 3 terminée: {marquage.reussis} marquages réussis, {marquage.echecs} échecs");
 
-                // 4. Rapport final
-                _logger.LogInformation("📊 SYNCHRONISATION COMPLÈTE TERMINÉE:");
+                // 5. Rapport final
+                _logger.LogInformation("📊 SYNCHRONISATION COMPLÈTE TERMINÉE (SharePoint → Ekialis):");
                 _logger.LogInformation($"   - Ajouts Ekialis: {ajoutsEkialis.reussis} réussis, {ajoutsEkialis.echecs} échecs");
                 _logger.LogInformation($"   - Caractéristiques: {miseAJour.modifiees} modifiées, {miseAJour.ajoutees} ajoutées");
                 _logger.LogInformation($"   - Marquages rouge: {marquage.reussis} réussis");
@@ -104,7 +103,7 @@ namespace API_Ekialis_Excel.Services
             {
                 // Récupération des logiciels Ekialis (noms uniquement)
                 var rawJson = await ekialisService.GetComponentsRawJsonAsync();
-                var jArray = Newtonsoft.Json.Linq.JArray.Parse(rawJson);
+                var jArray = JArray.Parse(rawJson);
 
                 var nomsEkialis = new HashSet<string>();
                 foreach (var item in jArray)
@@ -169,20 +168,120 @@ namespace API_Ekialis_Excel.Services
             }
         }
 
-        // Supprimé - Ne pas synchroniser Ekialis vers SharePoint car SharePoint est la source de vérité
-
         private async Task<(int modifiees, int ajoutees, int erreurs)> SynchroniserCaracteristiques(EkialisService ekialisService, SharePointRestService sharePointService)
         {
             try
             {
-                // [Code similaire à la méthode du controller mais simplifié pour les logs]
-                // Récupération et comparaison des caractéristiques
-                // Retourne le nombre de modifications/ajouts/erreurs
+                // Récupération des logiciels Ekialis avec leurs caractéristiques
+                var rawJson = await ekialisService.GetComponentsRawJsonAsync();
+                var jArray = JArray.Parse(rawJson);
 
-                // Pour l'instant, on retourne des valeurs par défaut
-                // Vous pouvez copier le code de la méthode SynchroniserCaracteristiques du controller ici
+                var logicielsEkialis = new Dictionary<string, (int id, Dictionary<string, (int valueId, string currentValue, int characteristicId)> characteristics)>();
 
-                return (0, 0, 0);
+                foreach (var item in jArray)
+                {
+                    var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
+                    if (componentClassId != "1") continue;
+
+                    var nomAppli = item["name"]?.ToString()?.Trim() ?? "";
+                    var componentId = item["id"]?.ToObject<int>() ?? 0;
+
+                    if (string.IsNullOrEmpty(nomAppli) || componentId == 0) continue;
+
+                    var caracteristiques = new Dictionary<string, (int valueId, string currentValue, int characteristicId)>();
+
+                    if (item["characteristics"] is JArray caractList)
+                    {
+                        foreach (var caract in caractList)
+                        {
+                            var nomCarac = caract["name"]?.ToString() ?? "";
+                            var valeur = caract["characteristicValue"]?["value"]?.ToString() ?? "";
+                            var valueId = caract["characteristicValue"]?["id"]?.ToObject<int>() ?? 0;
+                            var characteristicId = caract["id"]?.ToObject<int>() ?? 0;
+
+                            if (FieldMapping.IsCharacteristicMapped(nomCarac) && valueId > 0 && characteristicId > 0)
+                            {
+                                caracteristiques[nomCarac] = (valueId, valeur, characteristicId);
+                            }
+                        }
+                    }
+
+                    logicielsEkialis[nomAppli.ToLower()] = (componentId, caracteristiques);
+                }
+
+                // Récupération des logiciels SharePoint
+                var itemsSharePoint = await sharePointService.GetSelectedFieldsAsync();
+                var logicielsSharePoint = new Dictionary<string, Dictionary<string, string>>();
+
+                foreach (var item in itemsSharePoint)
+                {
+                    if (!item.ContainsKey("Title")) continue;
+
+                    var title = item["Title"]?.ToString()?.Trim() ?? "";
+                    if (string.IsNullOrEmpty(title)) continue;
+
+                    var champs = new Dictionary<string, string>();
+                    foreach (var field in item)
+                    {
+                        if (field.Key != "Title" && FieldMapping.IsFieldMapped(field.Key))
+                        {
+                            var valeur = field.Value?.ToString()?.Trim() ?? "";
+                            if (!string.IsNullOrEmpty(valeur))
+                            {
+                                var caracteristique = FieldMapping.GetEkialisCharacteristic(field.Key);
+                                if (!string.IsNullOrEmpty(caracteristique))
+                                {
+                                    champs[caracteristique] = valeur;
+                                }
+                            }
+                        }
+                    }
+
+                    logicielsSharePoint[title.ToLower()] = champs;
+                }
+
+                // Synchronisation des logiciels communs
+                var logicielsCommuns = logicielsEkialis.Keys.Intersect(logicielsSharePoint.Keys).ToList();
+
+                var caracteristiquesModifiees = 0;
+                var caracteristiquesAjoutees = 0;
+                var erreurs = 0;
+
+                foreach (var nomLogiciel in logicielsCommuns)
+                {
+                    var (componentId, caracteristiquesEkialis) = logicielsEkialis[nomLogiciel];
+                    var champsSharePoint = logicielsSharePoint[nomLogiciel];
+
+                    foreach (var champSharePoint in champsSharePoint)
+                    {
+                        var nomCaracteristique = champSharePoint.Key;
+                        var valeurSharePoint = champSharePoint.Value;
+
+                        if (caracteristiquesEkialis.ContainsKey(nomCaracteristique))
+                        {
+                            var (valueId, valeurEkialis, characteristicId) = caracteristiquesEkialis[nomCaracteristique];
+
+                            if (valeurEkialis != valeurSharePoint)
+                            {
+                                var success = await ekialisService.UpdateExistingCharacteristicValueAsync(valueId, valeurSharePoint, componentId, characteristicId);
+                                if (success)
+                                    caracteristiquesModifiees++;
+                                else
+                                    erreurs++;
+                            }
+                        }
+                        else
+                        {
+                            var success = await ekialisService.AddCharacteristicToComponentAsync(componentId, nomCaracteristique, valeurSharePoint);
+                            if (success)
+                                caracteristiquesAjoutees++;
+                            else
+                                erreurs++;
+                        }
+                    }
+                }
+
+                return (caracteristiquesModifiees, caracteristiquesAjoutees, erreurs);
             }
             catch (Exception ex)
             {
@@ -205,7 +304,7 @@ namespace API_Ekialis_Excel.Services
 
                 // Récupération des logiciels Ekialis
                 var rawJson = await ekialisService.GetComponentsRawJsonAsync();
-                var jArray = Newtonsoft.Json.Linq.JArray.Parse(rawJson);
+                var jArray = JArray.Parse(rawJson);
 
                 var logicielsObsoletes = new List<(int id, string name, string currentColor)>();
 
@@ -251,6 +350,19 @@ namespace API_Ekialis_Excel.Services
                 _logger.LogError(ex, "Erreur lors du marquage des logiciels obsolètes");
                 return (0, 1);
             }
+        }
+
+        public override async Task StopAsync(CancellationToken stoppingToken)
+        {
+            _logger.LogInformation("🛑 Arrêt du service de synchronisation automatique");
+            _timer?.Change(Timeout.Infinite, 0);
+            await base.StopAsync(stoppingToken);
+        }
+
+        public override void Dispose()
+        {
+            _timer?.Dispose();
+            base.Dispose();
         }
     }
 }
