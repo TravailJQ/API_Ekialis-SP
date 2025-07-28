@@ -18,8 +18,21 @@ namespace API_Ekialis_Excel.Controllers
             _configuration = configuration;
         }
 
-        [HttpPost("synchronisation-manuelle-complete")]
-        public async Task<IActionResult> SynchronisationManuelleComplete()
+        /// <summary>
+        /// Lance une synchronisation complète : SharePoint → Ekialis
+        /// </summary>
+        /// <remarks>
+        /// Effectue une synchronisation complète en 3 phases :
+        /// - Phase 1 : Ajoute les logiciels de SharePoint manquants dans Ekialis
+        /// - Phase 2 : Met à jour les caractéristiques Ekialis selon SharePoint  
+        /// - Phase 3 : Marque en rouge les logiciels obsolètes dans Ekialis
+        /// 
+        /// SharePoint est considéré comme la source de vérité.
+        /// </remarks>
+        /// <response code="200">Synchronisation terminée avec succès</response>
+        /// <response code="401">Échec de l'authentification Ekialis</response>
+        [HttpPost("sharepoint-vers-ekialis-complet")]
+        public async Task<IActionResult> SynchronisationSharePointVersEkialisComplete()
         {
             try
             {
@@ -66,8 +79,39 @@ namespace API_Ekialis_Excel.Controllers
             }
         }
 
-        [HttpGet("status-synchronisation")]
-        public IActionResult GetStatusSynchronisation()
+        /// <summary>
+        /// Teste l'authentification Basic Auth
+        /// </summary>
+        /// <remarks>
+        /// Endpoint simple pour vérifier que l'authentification Basic Auth fonctionne correctement.
+        /// Utilisez vos identifiants configurés dans BasicAuthMiddleware.
+        /// </remarks>
+        /// <response code="200">Authentification réussie</response>
+        /// <response code="401">Identifiants invalides</response>
+        [HttpGet("test-authentification")]
+        public IActionResult TestAuthentification()
+        {
+            return Ok(new
+            {
+                message = "Authentification réussie",
+                timestamp = DateTime.Now,
+                user = "Accès autorisé"
+            });
+        }
+
+        /// <summary>
+        /// Affiche le statut de la synchronisation automatique
+        /// </summary>
+        /// <remarks>
+        /// Retourne les informations sur la synchronisation automatique :
+        /// - Statut (actif/inactif)
+        /// - Fréquence d'exécution
+        /// - Prochaine exécution prévue
+        /// - Liste des endpoints disponibles
+        /// </remarks>
+        /// <response code="200">Statut récupéré avec succès</response>
+        [HttpGet("statut-synchronisation-automatique")]
+        public IActionResult GetStatutSynchronisationAutomatique()
         {
             var status = new
             {
@@ -79,11 +123,12 @@ namespace API_Ekialis_Excel.Controllers
                 },
                 endpointsDisponibles = new[]
                 {
-                    "POST /api/Synchronization/synchronisation-manuelle-complete - Lance une synchronisation complète (SharePoint → Ekialis)",
-                    "POST /api/Operations/sharepoint-vers-ekialis - Ajoute les logiciels SharePoint manquants dans Ekialis",
-                    "POST /api/Operations/ekialis-vers-sharepoint - Ajoute les logiciels Ekialis manquants dans SharePoint (MANUEL UNIQUEMENT)",
-                    "POST /api/Operations/synchroniser-caracteristiques - Met à jour les caractéristiques",
-                    "POST /api/Operations/marquer-obsoletes-rouge - Marque les logiciels obsolètes en rouge"
+                    "POST /api/Synchronization/sharepoint-vers-ekialis-complet - Synchronisation complète SharePoint → Ekialis",
+                    "POST /api/Operations/ajouter-sharepoint-vers-ekialis - Ajoute uniquement les logiciels manquants dans Ekialis",
+                    "POST /api/Operations/ajouter-ekialis-vers-sharepoint - Ajoute uniquement les logiciels manquants dans SharePoint",
+                    "POST /api/Operations/mettre-a-jour-caracteristiques - Met à jour les caractéristiques selon SharePoint",
+                    "POST /api/Operations/marquer-obsoletes-rouge - Marque les logiciels obsolètes en rouge",
+                    "POST /api/Operations/importer-excel-vers-sharepoint - Importe un fichier Excel vers SharePoint"
                 }
             };
 
@@ -160,151 +205,251 @@ namespace API_Ekialis_Excel.Controllers
             };
         }
 
-        private async Task<object> SynchroniserVersSharePoint(EkialisService ekialisService)
+        // Méthode supprimée - SharePoint est la source de vérité
+        // La synchronisation Ekialis → SharePoint n'est disponible qu'en manuel via OperationsController
+
+        private async Task<object> SynchroniserCaracteristiques(EkialisService ekialisService)
         {
-            // 1. Récupération des logiciels Ekialis avec caractéristiques
-            var rawJson = await ekialisService.GetComponentsRawJsonAsync();
-            var jArray = JArray.Parse(rawJson);
-
-            var logicielsEkialis = new Dictionary<string, Dictionary<string, string>>();
-
-            foreach (var item in jArray)
+            try
             {
-                var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
-                if (componentClassId != "1") continue;
+                Console.WriteLine("🔄 Début de la synchronisation des caractéristiques...");
 
-                var nomAppli = item["name"]?.ToString()?.Trim() ?? "";
-                if (string.IsNullOrEmpty(nomAppli)) continue;
+                // 1. Récupération des logiciels Ekialis avec leurs caractéristiques
+                var rawJson = await ekialisService.GetComponentsRawJsonAsync();
+                var jArray = JArray.Parse(rawJson);
 
-                var caracteristiques = new Dictionary<string, string>();
+                var logicielsEkialis = new Dictionary<string, (int id, Dictionary<string, (int valueId, string currentValue, int characteristicId)> characteristics)>();
 
-                if (item["characteristics"] is JArray caractList)
+                foreach (var item in jArray)
                 {
-                    foreach (var caract in caractList)
-                    {
-                        var valeur = caract["characteristicValue"]?["value"]?.ToString();
-                        var nomCaracFromJson = caract["name"]?.ToString() ?? "";
+                    var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
+                    if (componentClassId != "1") continue;
 
-                        if (!string.IsNullOrWhiteSpace(valeur) && !string.IsNullOrWhiteSpace(nomCaracFromJson))
+                    var nomAppli = item["name"]?.ToString()?.Trim() ?? "";
+                    var componentId = item["id"]?.ToObject<int>() ?? 0;
+
+                    if (string.IsNullOrEmpty(nomAppli) || componentId == 0) continue;
+
+                    var caracteristiques = new Dictionary<string, (int valueId, string currentValue, int characteristicId)>();
+
+                    if (item["characteristics"] is JArray caractList)
+                    {
+                        foreach (var caract in caractList)
                         {
-                            if (FieldMapping.IsCharacteristicMapped(nomCaracFromJson))
+                            var nomCarac = caract["name"]?.ToString() ?? "";
+                            var valeur = caract["characteristicValue"]?["value"]?.ToString() ?? "";
+                            var valueId = caract["characteristicValue"]?["id"]?.ToObject<int>() ?? 0;
+                            var characteristicId = caract["id"]?.ToObject<int>() ?? 0;
+
+                            if (FieldMapping.IsCharacteristicMapped(nomCarac) && valueId > 0 && characteristicId > 0)
                             {
-                                caracteristiques[nomCaracFromJson] = valeur;
+                                caracteristiques[nomCarac] = (valueId, valeur, characteristicId);
                             }
+                        }
+                    }
+
+                    logicielsEkialis[nomAppli.ToLower()] = (componentId, caracteristiques);
+                }
+
+                // 2. Récupération des logiciels SharePoint
+                var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
+                var logicielsSharePoint = new Dictionary<string, Dictionary<string, string>>();
+
+                foreach (var item in itemsSharePoint)
+                {
+                    if (!item.ContainsKey("Title")) continue;
+
+                    var title = item["Title"]?.ToString()?.Trim() ?? "";
+                    if (string.IsNullOrEmpty(title)) continue;
+
+                    var champs = new Dictionary<string, string>();
+                    foreach (var field in item)
+                    {
+                        if (field.Key != "Title" && FieldMapping.IsFieldMapped(field.Key))
+                        {
+                            var valeur = field.Value?.ToString()?.Trim() ?? "";
+                            if (!string.IsNullOrEmpty(valeur))
+                            {
+                                var caracteristique = FieldMapping.GetEkialisCharacteristic(field.Key);
+                                if (!string.IsNullOrEmpty(caracteristique))
+                                {
+                                    champs[caracteristique] = valeur;
+                                }
+                            }
+                        }
+                    }
+
+                    logicielsSharePoint[title.ToLower()] = champs;
+                }
+
+                // 3. Synchronisation des logiciels communs
+                var logicielsCommuns = logicielsEkialis.Keys.Intersect(logicielsSharePoint.Keys).ToList();
+                Console.WriteLine($"🔍 Logiciels communs trouvés: {logicielsCommuns.Count}");
+
+                var caracteristiquesModifiees = 0;
+                var caracteristiquesAjoutees = 0;
+                var erreurs = 0;
+
+                foreach (var nomLogiciel in logicielsCommuns)
+                {
+                    Console.WriteLine($"\n📋 Traitement de '{nomLogiciel}':");
+
+                    var (componentId, caracteristiquesEkialis) = logicielsEkialis[nomLogiciel];
+                    var champsSharePoint = logicielsSharePoint[nomLogiciel];
+
+                    foreach (var champSharePoint in champsSharePoint)
+                    {
+                        var nomCaracteristique = champSharePoint.Key;
+                        var valeurSharePoint = champSharePoint.Value;
+
+                        Console.WriteLine($"  🔍 Vérification: {nomCaracteristique} = '{valeurSharePoint}'");
+
+                        if (caracteristiquesEkialis.ContainsKey(nomCaracteristique))
+                        {
+                            var (valueId, valeurEkialis, characteristicId) = caracteristiquesEkialis[nomCaracteristique];
+
+                            if (valeurEkialis != valeurSharePoint)
+                            {
+                                Console.WriteLine($"    📝 Mise à jour: '{valeurEkialis}' → '{valeurSharePoint}'");
+                                var success = await ekialisService.UpdateExistingCharacteristicValueAsync(valueId, valeurSharePoint, componentId, characteristicId);
+                                if (success)
+                                    caracteristiquesModifiees++;
+                                else
+                                    erreurs++;
+                            }
+                            else
+                            {
+                                Console.WriteLine($"    ✅ Valeur identique, pas de mise à jour nécessaire");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"    ➕ Création de nouvelle valeur de caractéristique");
+                            var success = await ekialisService.AddCharacteristicToComponentAsync(componentId, nomCaracteristique, valeurSharePoint);
+                            if (success)
+                                caracteristiquesAjoutees++;
+                            else
+                                erreurs++;
                         }
                     }
                 }
 
-                logicielsEkialis[nomAppli.ToLower()] = caracteristiques;
+                return new
+                {
+                    logicielsCommuns = logicielsCommuns.Count,
+                    caracteristiquesModifiees,
+                    caracteristiquesAjoutees,
+                    erreurs
+                };
             }
-
-            // 2. Récupération des logiciels SharePoint
-            var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
-            var nomsSharePoint = itemsSharePoint
-                .Where(i => i.ContainsKey("Title"))
-                .Select(i => i["Title"]?.ToString()?.Trim().ToLower())
-                .Where(n => !string.IsNullOrEmpty(n))
-                .ToHashSet();
-
-            // 3. Identification des logiciels manquants dans SharePoint
-            var logicielsManquants = logicielsEkialis
-                .Where(kvp => !nomsSharePoint.Contains(kvp.Key))
-                .ToList();
-
-            // 4. Ajout des logiciels manquants
-            var ajoutsReussis = 0;
-            var ajoutsEchecs = 0;
-
-            foreach (var logicielManquant in logicielsManquants)
+            catch (Exception ex)
             {
-                var nomOriginal = logicielsEkialis.FirstOrDefault(kvp => kvp.Key == logicielManquant.Key).Key;
-                var success = await _sharePointService.AddItemToSharePointAsync(nomOriginal, logicielManquant.Value);
-
-                if (success)
-                    ajoutsReussis++;
-                else
-                    ajoutsEchecs++;
+                Console.WriteLine($"❌ Erreur lors de la synchronisation des caractéristiques: {ex.Message}");
+                return new
+                {
+                    logicielsCommuns = 0,
+                    caracteristiquesModifiees = 0,
+                    caracteristiquesAjoutees = 0,
+                    erreurs = 1
+                };
             }
-
-            return new
-            {
-                totalEkialis = logicielsEkialis.Count,
-                totalSharePoint = nomsSharePoint.Count,
-                logicielsManquants = logicielsManquants.Count,
-                ajoutsReussis,
-                ajoutsEchecs
-            };
-        }
-
-        private async Task<object> SynchroniserCaracteristiques(EkialisService ekialisService)
-        {
-            // [Implémentation de la synchronisation des caractéristiques - code existant]
-            // Retourne un objet avec les statistiques
-            return new
-            {
-                caracteristiquesModifiees = 0,
-                caracteristiquesAjoutees = 0,
-                erreurs = 0
-            };
         }
 
         private async Task<object> MarquerObsoletesRouge(EkialisService ekialisService)
         {
-            // 1. Récupération des logiciels SharePoint (source de vérité)
-            var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
-            var nomsSharePoint = itemsSharePoint
-                .Where(i => i.ContainsKey("Title"))
-                .Select(i => i["Title"]?.ToString()?.Trim().ToLower())
-                .Where(n => !string.IsNullOrEmpty(n))
-                .ToHashSet();
-
-            // 2. Récupération des logiciels Ekialis
-            var rawJson = await ekialisService.GetComponentsRawJsonAsync();
-            var jArray = JArray.Parse(rawJson);
-
-            var logicielsObsoletes = new List<(int id, string name, string currentColor)>();
-
-            foreach (var item in jArray)
+            try
             {
-                var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
-                if (componentClassId != "1") continue;
+                // 1. Récupération des logiciels SharePoint (source de vérité)
+                var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
+                var nomsSharePoint = itemsSharePoint
+                    .Where(i => i.ContainsKey("Title"))
+                    .Select(i => i["Title"]?.ToString()?.Trim().ToLower())
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .ToHashSet();
 
-                var id = item["id"]?.ToObject<int>() ?? 0;
-                var name = item["name"]?.ToString()?.Trim() ?? "";
-                var color = item["color"]?.ToString() ?? "";
+                Console.WriteLine($"📋 Logiciels dans SharePoint: {nomsSharePoint.Count}");
 
-                if (id > 0 && !string.IsNullOrEmpty(name) && !nomsSharePoint.Contains(name.ToLower()))
+                // 2. Récupération des logiciels Ekialis
+                var rawJson = await ekialisService.GetComponentsRawJsonAsync();
+                var jArray = JArray.Parse(rawJson);
+
+                var logicielsEkialis = new List<(int id, string name, string currentColor)>();
+
+                foreach (var item in jArray)
                 {
-                    logicielsObsoletes.Add((id, name, color));
-                }
-            }
+                    var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
+                    if (componentClassId != "1") continue;
 
-            // 3. Marquage en rouge des logiciels obsolètes
-            var marquagesReussis = 0;
-            var marquagesEchecs = 0;
+                    var id = item["id"]?.ToObject<int>() ?? 0;
+                    var name = item["name"]?.ToString()?.Trim() ?? "";
+                    var color = item["color"]?.ToString() ?? "";
 
-            foreach (var logicielObsolete in logicielsObsoletes)
-            {
-                if (logicielObsolete.currentColor.ToUpper() == "FF0000")
-                {
-                    marquagesReussis++;
-                    continue;
+                    if (id > 0 && !string.IsNullOrEmpty(name))
+                    {
+                        logicielsEkialis.Add((id, name, color));
+                    }
                 }
 
-                var success = await ekialisService.UpdateComponentColorAsync(logicielObsolete.id, "FF0000");
+                Console.WriteLine($"📋 Logiciels dans Ekialis: {logicielsEkialis.Count}");
 
-                if (success)
-                    marquagesReussis++;
-                else
-                    marquagesEchecs++;
+                // 3. Identification des logiciels obsolètes (dans Ekialis mais pas dans SharePoint)
+                var logicielsObsoletes = logicielsEkialis
+                    .Where(logiciel => !nomsSharePoint.Contains(logiciel.name.ToLower()))
+                    .ToList();
+
+                Console.WriteLine($"🔍 Logiciels obsolètes trouvés: {logicielsObsoletes.Count}");
+
+                // 4. Marquage en rouge des logiciels obsolètes
+                var marquagesReussis = 0;
+                var marquagesEchecs = 0;
+
+                foreach (var logicielObsolete in logicielsObsoletes)
+                {
+                    Console.WriteLine($"🔴 Marquage de '{logicielObsolete.name}' (ID: {logicielObsolete.id})");
+
+                    // Vérifier si déjà rouge pour éviter les appels inutiles
+                    if (logicielObsolete.currentColor.ToUpper() == "FF0000")
+                    {
+                        Console.WriteLine($"  ✅ Déjà marqué en rouge, ignoré");
+                        marquagesReussis++;
+                        continue;
+                    }
+
+                    var success = await ekialisService.UpdateComponentColorAsync(logicielObsolete.id, "FF0000");
+
+                    if (success)
+                    {
+                        marquagesReussis++;
+                        Console.WriteLine($"  ✅ Marqué en rouge avec succès");
+                    }
+                    else
+                    {
+                        marquagesEchecs++;
+                        Console.WriteLine($"  ❌ Échec du marquage");
+                    }
+                }
+
+                return new
+                {
+                    totalEkialis = logicielsEkialis.Count,
+                    totalSharePoint = nomsSharePoint.Count,
+                    logicielsObsoletes = logicielsObsoletes.Count,
+                    marquagesReussis,
+                    marquagesEchecs
+                };
             }
-
-            return new
+            catch (Exception ex)
             {
-                logicielsObsoletes = logicielsObsoletes.Count,
-                marquagesReussis,
-                marquagesEchecs
-            };
+                Console.WriteLine($"❌ Erreur lors du marquage: {ex.Message}");
+                return new
+                {
+                    totalEkialis = 0,
+                    totalSharePoint = 0,
+                    logicielsObsoletes = 0,
+                    marquagesReussis = 0,
+                    marquagesEchecs = 1
+                };
+            }
         }
     }
 }

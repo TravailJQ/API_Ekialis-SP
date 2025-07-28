@@ -1,7 +1,6 @@
 ﻿using API_Ekialis_Excel.Models;
 using API_Ekialis_Excel.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Graph.Models;
 using Newtonsoft.Json.Linq;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -22,8 +21,19 @@ namespace API_Ekialis_Excel.Controllers
             _configuration = configuration;
         }
 
-        [HttpPost("sharepoint-vers-ekialis")]
-        public async Task<IActionResult> SharePointVersEkialis()
+        /// <summary>
+        /// Ajoute les logiciels de SharePoint manquants dans Ekialis
+        /// </summary>
+        /// <remarks>
+        /// Compare les listes SharePoint et Ekialis, puis ajoute uniquement les logiciels 
+        /// présents dans SharePoint mais absents d'Ekialis.
+        /// 
+        /// Les caractéristiques mappées sont également ajoutées lors de la création.
+        /// </remarks>
+        /// <response code="200">Ajouts terminés avec succès</response>
+        /// <response code="401">Échec de l'authentification Ekialis</response>
+        [HttpPost("ajouter-sharepoint-vers-ekialis")]
+        public async Task<IActionResult> AjouterSharePointVersEkialis()
         {
             try
             {
@@ -120,109 +130,23 @@ namespace API_Ekialis_Excel.Controllers
             }
         }
 
-        [HttpPost("ekialis-vers-sharepoint")]
-        public async Task<IActionResult> EkialisVersSharePoint()
-        {
-            try
-            {
-                using var httpClient = new HttpClient();
-                var ekialisService = new EkialisService(httpClient, _configuration);
 
-                var authSuccess = await ekialisService.AuthenticateAsync();
-                if (!authSuccess)
-                    return Unauthorized("Échec de l'authentification Ekialis");
 
-                // 1. Récupération des logiciels Ekialis avec caractéristiques
-                var rawJson = await ekialisService.GetComponentsRawJsonAsync();
-                var jArray = JArray.Parse(rawJson);
-
-                var logicielsEkialis = new Dictionary<string, Dictionary<string, string>>();
-
-                foreach (var item in jArray)
-                {
-                    var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
-                    if (componentClassId != "1") continue;
-
-                    var nomAppli = item["name"]?.ToString()?.Trim() ?? "";
-                    if (string.IsNullOrEmpty(nomAppli)) continue;
-
-                    var caracteristiques = new Dictionary<string, string>();
-
-                    if (item["characteristics"] is JArray caractList)
-                    {
-                        foreach (var caract in caractList)
-                        {
-                            var valeur = caract["characteristicValue"]?["value"]?.ToString();
-                            var nomCaracFromJson = caract["name"]?.ToString() ?? "";
-
-                            if (!string.IsNullOrWhiteSpace(valeur) && !string.IsNullOrWhiteSpace(nomCaracFromJson))
-                            {
-                                if (FieldMapping.IsCharacteristicMapped(nomCaracFromJson))
-                                {
-                                    caracteristiques[nomCaracFromJson] = valeur;
-                                }
-                            }
-                        }
-                    }
-
-                    logicielsEkialis[nomAppli.ToLower()] = caracteristiques;
-                }
-
-                // 2. Récupération des logiciels SharePoint
-                var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
-                var nomsSharePoint = itemsSharePoint
-                    .Where(i => i.ContainsKey("Title"))
-                    .Select(i => i["Title"]?.ToString()?.Trim().ToLower())
-                    .Where(n => !string.IsNullOrEmpty(n))
-                    .ToHashSet();
-
-                // 3. Identification des logiciels manquants dans SharePoint
-                var logicielsManquants = logicielsEkialis
-                    .Where(kvp => !nomsSharePoint.Contains(kvp.Key))
-                    .ToList();
-
-                Console.WriteLine($"🔍 Logiciels manquants dans SharePoint: {logicielsManquants.Count}");
-
-                // 4. Ajout des logiciels manquants
-                var ajoutsReussis = 0;
-                var ajoutsEchecs = 0;
-
-                foreach (var logicielManquant in logicielsManquants)
-                {
-                    var nomOriginal = logicielsEkialis.FirstOrDefault(kvp => kvp.Key == logicielManquant.Key).Key;
-                    var success = await _sharePointService.AddItemToSharePointAsync(nomOriginal, logicielManquant.Value);
-
-                    if (success)
-                        ajoutsReussis++;
-                    else
-                        ajoutsEchecs++;
-                }
-
-                var response = new
-                {
-                    totalEkialis = logicielsEkialis.Count,
-                    totalSharePoint = nomsSharePoint.Count,
-                    logicielsManquants = logicielsManquants.Count,
-                    ajoutsReussis,
-                    ajoutsEchecs,
-                    logicielsAjoutes = logicielsManquants.Select(kvp => new
-                    {
-                        nom = kvp.Key,
-                        caracteristiques = kvp.Value
-                    }).ToList()
-                };
-
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Erreur lors de la synchronisation: {ex.Message}");
-                return StatusCode(500, $"Erreur lors de la synchronisation: {ex.Message}");
-            }
-        }
-
-        [HttpPost("synchroniser-caracteristiques")]
-        public async Task<IActionResult> SynchroniserCaracteristiques()
+        /// <summary>
+        /// Met à jour les caractéristiques Ekialis selon SharePoint
+        /// </summary>
+        /// <remarks>
+        /// Pour les logiciels présents dans les deux systèmes :
+        /// - Met à jour les valeurs de caractéristiques existantes si elles diffèrent
+        /// - Ajoute les nouvelles caractéristiques depuis SharePoint
+        /// 
+        /// SharePoint écrase toujours les valeurs d'Ekialis en cas de différence.
+        /// Seules les caractéristiques mappées dans FieldMapping sont traitées.
+        /// </remarks>
+        /// <response code="200">Mise à jour terminée avec succès</response>
+        /// <response code="401">Échec de l'authentification Ekialis</response>
+        [HttpPost("mettre-a-jour-caracteristiques")]
+        public async Task<IActionResult> MettreAJourCaracteristiques()
         {
             try
             {
@@ -372,8 +296,19 @@ namespace API_Ekialis_Excel.Controllers
             }
         }
 
+        /// <summary>
+        /// Marque en rouge les logiciels obsolètes dans Ekialis
+        /// </summary>
+        /// <remarks>
+        /// Identifie les logiciels présents dans Ekialis mais supprimés de SharePoint,
+        /// puis les marque en rouge (couleur FF0000) pour indiquer qu'ils sont obsolètes.
+        /// 
+        /// Les logiciels déjà marqués en rouge sont ignorés pour éviter les appels inutiles.
+        /// </remarks>
+        /// <response code="200">Marquage terminé avec succès</response>
+        /// <response code="401">Échec de l'authentification Ekialis</response>
         [HttpPost("marquer-obsoletes-rouge")]
-        public async Task<IActionResult> MarquerObsoletesRouge()
+        public async Task<IActionResult> MarquerLogicielsObsoletes()
         {
             try
             {
@@ -481,8 +416,33 @@ namespace API_Ekialis_Excel.Controllers
             }
         }
 
-        [HttpPost("import-excel-vers-sharepoint")]
-        public async Task<IActionResult> ImportExcelVersSharePoint(IFormFile excelFile)
+        /// <summary>
+        /// Importe un fichier Excel vers SharePoint
+        /// </summary>
+        /// <remarks>
+        /// Traite un fichier Excel et crée automatiquement les logiciels dans SharePoint.
+        /// 
+        /// **Format Excel attendu :**
+        /// - APPLICATION → Title (obligatoire)
+        /// - FOURNISSEUR → field_6
+        /// - SERVICE/ENTITE → field_1  
+        /// - ROLE → field_3
+        /// - PRIX → field_9
+        /// - Référent NGE → field_2
+        /// - Contact Commercial - Nom, Prénom → field_13
+        /// - Contact Commercial - Téléphone → field_15
+        /// - Contact Commercial - Mail → field_14
+        /// - LIEN EDITEUR (Présentation Solution) → field_25
+        /// - Pérénité Solution → field_27
+        /// 
+        /// **Important :** Cette opération crée uniquement dans SharePoint. 
+        /// Pour synchroniser vers Ekialis, lancez ensuite une synchronisation complète.
+        /// </remarks>
+        /// <param name="excelFile">Fichier Excel (.xlsx) contenant les logiciels à importer</param>
+        /// <response code="200">Import terminé avec succès</response>
+        /// <response code="400">Fichier manquant ou format invalide</response>
+        [HttpPost("importer-excel-vers-sharepoint")]
+        public async Task<IActionResult> ImporterExcelVersSharePoint(IFormFile excelFile)
         {
             try
             {
@@ -577,20 +537,20 @@ namespace API_Ekialis_Excel.Controllers
             {
                 // Mapping des colonnes Excel vers les champs SharePoint
                 var columnMapping = new Dictionary<string, string>
-        {
-            { "APPLICATION", "Title" },
-            { "APPLICATION ", "Title" }, // Avec espace
-            { "FOURNISSEUR", "field_6" },
-            { "SERVICE/ENTITE", "field_1" },
-            { "ROLE", "field_3" },
-            { "PRIX", "field_8" },
-            { "Référent NGE", "field_2" },
-            { "Contact Commercial - Nom, Prénom", "field_13" },
-            { "Contact Commercial - Téléphone", "field_15" },
-            { "Contact Commercial - Mail", "field_14" },
-            { "LIEN EDITEUR (Présentation Solution)", "field_25" },
-            { "Pérénité Solution", "field_27" }
-        };
+                {
+                    { "APPLICATION", "Title" },
+                    { "APPLICATION ", "Title" }, // Avec espace
+                    { "FOURNISSEUR", "field_6" },
+                    { "SERVICE/ENTITE", "field_1" },
+                    { "ROLE", "field_3" },
+                    { "PRIX", "field_9" },
+                    { "Référent NGE", "field_2" },
+                    { "Contact Commercial - Nom, Prénom", "field_13" },
+                    { "Contact Commercial - Téléphone", "field_15" },
+                    { "Contact Commercial - Mail", "field_14" },
+                    { "LIEN EDITEUR (Présentation Solution)", "field_25" },
+                    { "Pérénité Solution", "field_27" }
+                };
 
                 using (var stream = new MemoryStream(fileBytes))
                 using (var document = SpreadsheetDocument.Open(stream, false))
