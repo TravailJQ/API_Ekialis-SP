@@ -359,21 +359,29 @@ namespace API_Ekialis_Excel.Controllers
         {
             try
             {
+                Console.WriteLine("🔴 Début du marquage des logiciels obsolètes en rouge...");
+
                 // 1. Récupération des logiciels SharePoint (source de vérité)
                 var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
-                var nomsSharePoint = itemsSharePoint
+                var nomsSharePointOriginal = itemsSharePoint
                     .Where(i => i.ContainsKey("Title"))
-                    .Select(i => i["Title"]?.ToString()?.Trim().ToLower())
+                    .Select(i => i["Title"]?.ToString()?.Trim())
                     .Where(n => !string.IsNullOrEmpty(n))
+                    .ToList();
+
+                // Normalisation des noms SharePoint pour comparaison
+                var nomsSharePointNormalises = nomsSharePointOriginal
+                    .Select(nom => NormaliserNomPourComparaison(nom))
                     .ToHashSet();
 
-                Console.WriteLine($"📋 Logiciels dans SharePoint: {nomsSharePoint.Count}");
+                Console.WriteLine($"📋 Logiciels dans SharePoint: {nomsSharePointOriginal.Count}");
+                Console.WriteLine($"📋 Premiers logiciels SharePoint: {string.Join(", ", nomsSharePointOriginal.Take(5))}");
 
                 // 2. Récupération des logiciels Ekialis
                 var rawJson = await ekialisService.GetComponentsRawJsonAsync();
                 var jArray = JArray.Parse(rawJson);
 
-                var logicielsEkialis = new List<(int id, string name, string currentColor)>();
+                var logicielsEkialis = new List<(int id, string name, string nameNormalized, string currentColor)>();
 
                 foreach (var item in jArray)
                 {
@@ -386,20 +394,63 @@ namespace API_Ekialis_Excel.Controllers
 
                     if (id > 0 && !string.IsNullOrEmpty(name))
                     {
-                        logicielsEkialis.Add((id, name, color));
+                        var nameNormalized = NormaliserNomPourComparaison(name);
+                        logicielsEkialis.Add((id, name, nameNormalized, color));
                     }
                 }
 
                 Console.WriteLine($"📋 Logiciels dans Ekialis: {logicielsEkialis.Count}");
+                Console.WriteLine($"📋 Premiers logiciels Ekialis: {string.Join(", ", logicielsEkialis.Take(5).Select(l => l.name))}");
 
-                // 3. Identification des logiciels obsolètes (dans Ekialis mais pas dans SharePoint)
+                // 3. DIAGNOSTIC DÉTAILLÉ - Identifier les correspondances
+                Console.WriteLine("\n🔍 ANALYSE DES CORRESPONDANCES :");
+                var correspondances = new List<string>();
+                var manquantsSharePoint = new List<string>();
+
+                foreach (var logicielEkialis in logicielsEkialis.Take(10)) // Test sur les 10 premiers
+                {
+                    if (nomsSharePointNormalises.Contains(logicielEkialis.nameNormalized))
+                    {
+                        correspondances.Add($"✅ MATCH: '{logicielEkialis.name}' trouvé dans SharePoint");
+                    }
+                    else
+                    {
+                        manquantsSharePoint.Add($"❌ MANQUANT: '{logicielEkialis.name}' (normalisé: '{logicielEkialis.nameNormalized}') absent de SharePoint");
+
+                        // Recherche de correspondances proches
+                        var correspondanceProche = nomsSharePointOriginal
+                            .Where(sp => CalculerSimilitude(logicielEkialis.name, sp) > 0.8)
+                            .FirstOrDefault();
+
+                        if (correspondanceProche != null)
+                        {
+                            Console.WriteLine($"   🔍 Correspondance probable: '{correspondanceProche}' (similarité élevée)");
+                        }
+                    }
+                }
+
+                // Afficher les diagnostics
+                correspondances.ForEach(Console.WriteLine);
+                manquantsSharePoint.ForEach(Console.WriteLine);
+
+                // 4. Identification des logiciels vraiment obsolètes
                 var logicielsObsoletes = logicielsEkialis
-                    .Where(logiciel => !nomsSharePoint.Contains(logiciel.name.ToLower()))
+                    .Where(logiciel => !nomsSharePointNormalises.Contains(logiciel.nameNormalized))
                     .ToList();
 
-                Console.WriteLine($"🔍 Logiciels obsolètes trouvés: {logicielsObsoletes.Count}");
+                Console.WriteLine($"\n🔍 Logiciels réellement obsolètes identifiés: {logicielsObsoletes.Count}");
 
-                // 4. Marquage en rouge des logiciels obsolètes
+                // Afficher la liste des logiciels qui seraient marqués
+                if (logicielsObsoletes.Any())
+                {
+                    Console.WriteLine("📋 Logiciels qui seront marqués obsolètes :");
+                    foreach (var obsolete in logicielsObsoletes.Take(10))
+                    {
+                        Console.WriteLine($"   - '{obsolete.name}' (ID: {obsolete.id})");
+                    }
+                }
+
+                // 5. Marquage en rouge des logiciels obsolètes (avec confirmation)
                 var marquagesReussis = 0;
                 var marquagesEchecs = 0;
 
@@ -432,10 +483,22 @@ namespace API_Ekialis_Excel.Controllers
                 return new
                 {
                     totalEkialis = logicielsEkialis.Count,
-                    totalSharePoint = nomsSharePoint.Count,
+                    totalSharePoint = nomsSharePointOriginal.Count,
                     logicielsObsoletes = logicielsObsoletes.Count,
                     marquagesReussis,
-                    marquagesEchecs
+                    marquagesEchecs,
+                    diagnostics = new
+                    {
+                        correspondancesFound = correspondances.Count,
+                        logicielsMarques = logicielsObsoletes.Select(l => new
+                        {
+                            id = l.id,
+                            nom = l.name,
+                            nomNormalise = l.nameNormalized,
+                            ancienneCouleur = l.currentColor,
+                            nouvelleCouleur = "FF0000"
+                        }).ToList()
+                    }
                 };
             }
             catch (Exception ex)
@@ -447,9 +510,65 @@ namespace API_Ekialis_Excel.Controllers
                     totalSharePoint = 0,
                     logicielsObsoletes = 0,
                     marquagesReussis = 0,
-                    marquagesEchecs = 1
+                    marquagesEchecs = 1,
+                    erreur = ex.Message
                 };
             }
+        }
+
+        // Méthodes utilitaires à ajouter dans vos controllers
+        private string NormaliserNomPourComparaison(string nom)
+        {
+            if (string.IsNullOrEmpty(nom)) return "";
+
+            return nom.Trim()
+                      .ToLowerInvariant()
+                      .Replace("  ", " ") // Double espaces -> simple
+                      .Replace("_", " ")  // Underscores -> espaces
+                      .Replace("-", " ")  // Tirets -> espaces
+                      .Normalize(); // Normalisation Unicode
+        }
+
+        private double CalculerSimilitude(string nom1, string nom2)
+        {
+            if (string.IsNullOrEmpty(nom1) || string.IsNullOrEmpty(nom2)) return 0;
+
+            nom1 = NormaliserNomPourComparaison(nom1);
+            nom2 = NormaliserNomPourComparaison(nom2);
+
+            if (nom1 == nom2) return 1.0;
+
+            // Calcul simple de similarité basé sur la distance de Levenshtein
+            var longueurMax = Math.Max(nom1.Length, nom2.Length);
+            if (longueurMax == 0) return 1.0;
+
+            var distance = CalculerDistanceLevenshtein(nom1, nom2);
+            return 1.0 - (double)distance / longueurMax;
+        }
+
+        private int CalculerDistanceLevenshtein(string s1, string s2)
+        {
+            var matrix = new int[s1.Length + 1, s2.Length + 1];
+
+            for (int i = 0; i <= s1.Length; i++)
+                matrix[i, 0] = i;
+
+            for (int j = 0; j <= s2.Length; j++)
+                matrix[0, j] = j;
+
+            for (int i = 1; i <= s1.Length; i++)
+            {
+                for (int j = 1; j <= s2.Length; j++)
+                {
+                    var cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
+                    matrix[i, j] = Math.Min(Math.Min(
+                        matrix[i - 1, j] + 1,
+                        matrix[i, j - 1] + 1),
+                        matrix[i - 1, j - 1] + cost);
+                }
+            }
+
+            return matrix[s1.Length, s2.Length];
         }
     }
 }
