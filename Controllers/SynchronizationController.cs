@@ -359,20 +359,27 @@ namespace API_Ekialis_Excel.Controllers
         {
             try
             {
-                Console.WriteLine("🎨 Début de la synchronisation des couleurs selon SharePoint...");
+                Console.WriteLine("🎨 Début de la synchronisation des couleurs - TOUS EN VERT sauf obsolètes...");
 
-                // 1. Récupération SIMPLE des noms SharePoint
+                // 1. Récupération des logiciels SharePoint (noms Title uniquement)
                 var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
-                var nomsSharePoint = itemsSharePoint
-                    .Where(i => i.ContainsKey("Title"))
-                    .Select(i => i["Title"]?.ToString()?.Trim())
-                    .Where(n => !string.IsNullOrEmpty(n))
-                    .Select(n => n.ToLowerInvariant()) // Normalisation simple
-                    .ToHashSet();
+                var nomsSharePoint = new HashSet<string>();
 
-                Console.WriteLine($"📋 Logiciels dans SharePoint: {nomsSharePoint.Count}");
+                foreach (var item in itemsSharePoint)
+                {
+                    if (item.ContainsKey("Title"))
+                    {
+                        var title = item["Title"]?.ToString()?.Trim() ?? "";
+                        if (!string.IsNullOrEmpty(title))
+                        {
+                            nomsSharePoint.Add(title.ToLower());
+                        }
+                    }
+                }
 
-                // 2. Récupération SIMPLE des logiciels Ekialis
+                Console.WriteLine($"📋 Noms SharePoint récupérés: {nomsSharePoint.Count}");
+
+                // 2. Récupération des logiciels Ekialis
                 var rawJson = await ekialisService.GetComponentsRawJsonAsync();
                 var jArray = JArray.Parse(rawJson);
 
@@ -393,64 +400,71 @@ namespace API_Ekialis_Excel.Controllers
                     }
                 }
 
-                Console.WriteLine($"📋 Logiciels dans Ekialis: {logicielsEkialis.Count}");
+                Console.WriteLine($"📋 Logiciels Ekialis récupérés: {logicielsEkialis.Count}");
 
-                // 3. LOGIQUE SIMPLE : Comparaison directe
+                // 3. LOGIQUE SIMPLE: 
+                // - Si logiciel Ekialis ABSENT de SharePoint → ROUGE (obsolète)
+                // - Sinon → VERT (valide)
+
                 var aMarquerRouge = new List<(int id, string name, string currentColor)>();
                 var aMarquerVert = new List<(int id, string name, string currentColor)>();
 
                 foreach (var logicielEkialis in logicielsEkialis)
                 {
-                    var nomEkialisNormalise = logicielEkialis.name.ToLowerInvariant();
+                    var nomEkialisNormalise = logicielEkialis.name.ToLower();
+                    var couleurActuelle = NormaliserCouleur(logicielEkialis.currentColor);
 
                     if (nomsSharePoint.Contains(nomEkialisNormalise))
                     {
-                        // PRÉSENT dans SharePoint -> VERT (22B14C)
-                        if (logicielEkialis.currentColor.ToUpper() != "22B14C")
+                        // PRÉSENT dans SharePoint → VERT
+                        if (couleurActuelle != "22B14C")
                         {
                             aMarquerVert.Add(logicielEkialis);
-                            Console.WriteLine($"🟢 À marquer VERT: '{logicielEkialis.name}' (présent SharePoint)");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"✅ Déjà VERT: '{logicielEkialis.name}' (présent SharePoint)");
                         }
                     }
                     else
                     {
-                        // ABSENT de SharePoint -> ROUGE (FF0000)
-                        if (logicielEkialis.currentColor.ToUpper() != "FF0000")
+                        // ABSENT de SharePoint → ROUGE (obsolète)
+                        if (couleurActuelle != "FF0000")
                         {
                             aMarquerRouge.Add(logicielEkialis);
-                            Console.WriteLine($"🔴 À marquer ROUGE: '{logicielEkialis.name}' (absent SharePoint)");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"🔴 Déjà ROUGE: '{logicielEkialis.name}' (absent SharePoint)");
                         }
                     }
                 }
 
                 Console.WriteLine($"\n📊 RÉSUMÉ:");
-                Console.WriteLine($"   - À marquer en ROUGE (obsolètes): {aMarquerRouge.Count}");
-                Console.WriteLine($"   - À marquer en VERT (valides): {aMarquerVert.Count}");
+                Console.WriteLine($"   - Logiciels à marquer VERT: {aMarquerVert.Count}");
+                Console.WriteLine($"   - Logiciels à marquer ROUGE (obsolètes): {aMarquerRouge.Count}");
 
-                // 4. Application des couleurs ROUGE
-                var marquagesRougeReussis = 0;
-                var marquagesRougeEchecs = 0;
-
-                foreach (var logiciel in aMarquerRouge)
+                // TEST: Vérifier quelques logiciels pour debug
+                Console.WriteLine($"\n🔍 TEST sur les 10 premiers logiciels Ekialis:");
+                foreach (var test in logicielsEkialis.Take(10))
                 {
-                    Console.WriteLine($"🔴 Marquage ROUGE: '{logiciel.name}' (ID: {logiciel.id})");
-                    var success = await ekialisService.UpdateComponentColorAsync(logiciel.id, "FF0000");
-
-                    if (success)
-                        marquagesRougeReussis++;
-                    else
-                        marquagesRougeEchecs++;
+                    var testNorm = test.name.ToLower();
+                    var present = nomsSharePoint.Contains(testNorm);
+                    Console.WriteLine($"  - '{test.name}' → {(present ? "✅ PRÉSENT" : "❌ ABSENT")} SharePoint");
                 }
 
-                // 5. Application des couleurs VERT
+                // Si TOUS sont marqués rouge, il y a un problème de comparaison
+                if (aMarquerRouge.Count == logicielsEkialis.Count && aMarquerVert.Count == 0)
+                {
+                    Console.WriteLine($"⚠️ ATTENTION: TOUS les logiciels seraient marqués rouge!");
+                    Console.WriteLine($"⚠️ Cela indique un problème de comparaison des noms.");
+                    Console.WriteLine($"⚠️ Premiers noms SharePoint: {string.Join(", ", nomsSharePoint.Take(5))}");
+                    Console.WriteLine($"⚠️ Premiers noms Ekialis: {string.Join(", ", logicielsEkialis.Take(5).Select(l => l.name.ToLower()))}");
+
+                    // SÉCURITÉ: Ne pas exécuter si tous seraient marqués rouge
+                    return new
+                    {
+                        erreur = "Tous les logiciels seraient marqués rouge - comparaison échouée",
+                        totalEkialis = logicielsEkialis.Count,
+                        totalSharePoint = nomsSharePoint.Count,
+                        premierNomsSharePoint = nomsSharePoint.Take(10).ToList(),
+                        premierNomsEkialis = logicielsEkialis.Take(10).Select(l => l.name.ToLower()).ToList()
+                    };
+                }
+
+                // 4. Application des couleurs VERT
                 var marquagesVertReussis = 0;
                 var marquagesVertEchecs = 0;
 
@@ -465,24 +479,39 @@ namespace API_Ekialis_Excel.Controllers
                         marquagesVertEchecs++;
                 }
 
+                // 5. Application des couleurs ROUGE (seulement les vrais obsolètes)
+                var marquagesRougeReussis = 0;
+                var marquagesRougeEchecs = 0;
+
+                foreach (var logiciel in aMarquerRouge)
+                {
+                    Console.WriteLine($"🔴 Marquage ROUGE: '{logiciel.name}' (ID: {logiciel.id}) - OBSOLÈTE");
+                    var success = await ekialisService.UpdateComponentColorAsync(logiciel.id, "FF0000");
+
+                    if (success)
+                        marquagesRougeReussis++;
+                    else
+                        marquagesRougeEchecs++;
+                }
+
                 return new
                 {
                     totalEkialis = logicielsEkialis.Count,
                     totalSharePoint = nomsSharePoint.Count,
-                    marquagesRouge = new
-                    {
-                        total = aMarquerRouge.Count,
-                        reussis = marquagesRougeReussis,
-                        echecs = marquagesRougeEchecs
-                    },
                     marquagesVert = new
                     {
                         total = aMarquerVert.Count,
                         reussis = marquagesVertReussis,
                         echecs = marquagesVertEchecs
                     },
-                    logicielsRouges = aMarquerRouge.Select(l => l.name).ToList(),
-                    logicielsVerts = aMarquerVert.Select(l => l.name).ToList()
+                    marquagesRouge = new
+                    {
+                        total = aMarquerRouge.Count,
+                        reussis = marquagesRougeReussis,
+                        echecs = marquagesRougeEchecs
+                    },
+                    logicielsVerts = aMarquerVert.Select(l => l.name).Take(10).ToList(),
+                    logicielsRouges = aMarquerRouge.Select(l => l.name).ToList()
                 };
             }
             catch (Exception ex)
@@ -490,13 +519,25 @@ namespace API_Ekialis_Excel.Controllers
                 Console.WriteLine($"❌ Erreur lors du marquage: {ex.Message}");
                 return new
                 {
-                    totalEkialis = 0,
-                    totalSharePoint = 0,
-                    marquagesRouge = new { total = 0, reussis = 0, echecs = 1 },
-                    marquagesVert = new { total = 0, reussis = 0, echecs = 0 },
                     erreur = ex.Message
                 };
             }
+        }
+
+        // Méthode utilitaire pour normaliser les couleurs
+        private string NormaliserCouleur(string couleur)
+        {
+            if (string.IsNullOrEmpty(couleur)) return "";
+            return couleur.Replace("#", "").ToUpperInvariant();
+        }
+
+        // Méthode utilitaire pour normaliser les couleurs
+        private string NormaliserCouleur(string couleur)
+        {
+            if (string.IsNullOrEmpty(couleur)) return "";
+
+            // Supprimer le # si présent et convertir en majuscules
+            return couleur.Replace("#", "").ToUpperInvariant();
         }
 
         // Méthodes utilitaires à ajouter dans vos controllers
