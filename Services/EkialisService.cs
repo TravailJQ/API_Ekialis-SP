@@ -505,6 +505,14 @@ namespace API_Ekialis_Excel.Services
                 var currentData = await getResponse.Content.ReadAsStringAsync();
                 var componentJson = JObject.Parse(currentData);
 
+                // Récupérer l'externalId actuel et gérer le cas vide
+                var currentExternalId = componentJson["externalId"]?.ToString() ?? "";
+
+                // Si l'externalId est vide, générer un ID unique pour éviter les conflits
+                var externalIdToUse = string.IsNullOrEmpty(currentExternalId)
+                    ? $"COLOR_UPDATE_{componentId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}"
+                    : currentExternalId;
+
                 // Construire l'objet de mise à jour avec toutes les propriétés requises
                 var updateData = new
                 {
@@ -514,7 +522,7 @@ namespace API_Ekialis_Excel.Services
                     componentClass = componentJson["componentClass"]?["id"]?.ToObject<int>() ?? 1,
                     componentStatus = componentJson["componentStatus"]?["id"]?.ToObject<int>() ?? 5,
                     company = componentJson["company"]?["id"]?.ToObject<int>() ?? 1,
-                    externalId = componentJson["externalId"]?.ToString() ?? ""
+                    externalId = externalIdToUse // Utilise l'ID existant ou en génère un nouveau
                 };
 
                 var jsonContent = JsonConvert.SerializeObject(updateData);

@@ -359,34 +359,29 @@ namespace API_Ekialis_Excel.Controllers
         {
             try
             {
-                Console.WriteLine("🔴 Début du marquage des logiciels obsolètes en rouge...");
+                Console.WriteLine("🎨 Début de la synchronisation des couleurs selon SharePoint...");
 
-                // 1. Récupération des logiciels SharePoint (source de vérité)
+                // 1. Récupération SIMPLE des noms SharePoint
                 var itemsSharePoint = await _sharePointService.GetSelectedFieldsAsync();
-                var nomsSharePointOriginal = itemsSharePoint
+                var nomsSharePoint = itemsSharePoint
                     .Where(i => i.ContainsKey("Title"))
                     .Select(i => i["Title"]?.ToString()?.Trim())
                     .Where(n => !string.IsNullOrEmpty(n))
-                    .ToList();
-
-                // Normalisation des noms SharePoint pour comparaison
-                var nomsSharePointNormalises = nomsSharePointOriginal
-                    .Select(nom => NormaliserNomPourComparaison(nom))
+                    .Select(n => n.ToLowerInvariant()) // Normalisation simple
                     .ToHashSet();
 
-                Console.WriteLine($"📋 Logiciels dans SharePoint: {nomsSharePointOriginal.Count}");
-                Console.WriteLine($"📋 Premiers logiciels SharePoint: {string.Join(", ", nomsSharePointOriginal.Take(5))}");
+                Console.WriteLine($"📋 Logiciels dans SharePoint: {nomsSharePoint.Count}");
 
-                // 2. Récupération des logiciels Ekialis
+                // 2. Récupération SIMPLE des logiciels Ekialis
                 var rawJson = await ekialisService.GetComponentsRawJsonAsync();
                 var jArray = JArray.Parse(rawJson);
 
-                var logicielsEkialis = new List<(int id, string name, string nameNormalized, string currentColor)>();
+                var logicielsEkialis = new List<(int id, string name, string currentColor)>();
 
                 foreach (var item in jArray)
                 {
                     var componentClassId = item["componentClass"]?["id"]?.ToString() ?? "";
-                    if (componentClassId != "1") continue;
+                    if (componentClassId != "1") continue; // Uniquement les logiciels
 
                     var id = item["id"]?.ToObject<int>() ?? 0;
                     var name = item["name"]?.ToString()?.Trim() ?? "";
@@ -394,111 +389,100 @@ namespace API_Ekialis_Excel.Controllers
 
                     if (id > 0 && !string.IsNullOrEmpty(name))
                     {
-                        var nameNormalized = NormaliserNomPourComparaison(name);
-                        logicielsEkialis.Add((id, name, nameNormalized, color));
+                        logicielsEkialis.Add((id, name, color));
                     }
                 }
 
                 Console.WriteLine($"📋 Logiciels dans Ekialis: {logicielsEkialis.Count}");
-                Console.WriteLine($"📋 Premiers logiciels Ekialis: {string.Join(", ", logicielsEkialis.Take(5).Select(l => l.name))}");
 
-                // 3. DIAGNOSTIC DÉTAILLÉ - Identifier les correspondances
-                Console.WriteLine("\n🔍 ANALYSE DES CORRESPONDANCES :");
-                var correspondances = new List<string>();
-                var manquantsSharePoint = new List<string>();
+                // 3. LOGIQUE SIMPLE : Comparaison directe
+                var aMarquerRouge = new List<(int id, string name, string currentColor)>();
+                var aMarquerVert = new List<(int id, string name, string currentColor)>();
 
-                foreach (var logicielEkialis in logicielsEkialis.Take(10)) // Test sur les 10 premiers
+                foreach (var logicielEkialis in logicielsEkialis)
                 {
-                    if (nomsSharePointNormalises.Contains(logicielEkialis.nameNormalized))
+                    var nomEkialisNormalise = logicielEkialis.name.ToLowerInvariant();
+
+                    if (nomsSharePoint.Contains(nomEkialisNormalise))
                     {
-                        correspondances.Add($"✅ MATCH: '{logicielEkialis.name}' trouvé dans SharePoint");
+                        // PRÉSENT dans SharePoint -> VERT (22B14C)
+                        if (logicielEkialis.currentColor.ToUpper() != "22B14C")
+                        {
+                            aMarquerVert.Add(logicielEkialis);
+                            Console.WriteLine($"🟢 À marquer VERT: '{logicielEkialis.name}' (présent SharePoint)");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"✅ Déjà VERT: '{logicielEkialis.name}' (présent SharePoint)");
+                        }
                     }
                     else
                     {
-                        manquantsSharePoint.Add($"❌ MANQUANT: '{logicielEkialis.name}' (normalisé: '{logicielEkialis.nameNormalized}') absent de SharePoint");
-
-                        // Recherche de correspondances proches
-                        var correspondanceProche = nomsSharePointOriginal
-                            .Where(sp => CalculerSimilitude(logicielEkialis.name, sp) > 0.8)
-                            .FirstOrDefault();
-
-                        if (correspondanceProche != null)
+                        // ABSENT de SharePoint -> ROUGE (FF0000)
+                        if (logicielEkialis.currentColor.ToUpper() != "FF0000")
                         {
-                            Console.WriteLine($"   🔍 Correspondance probable: '{correspondanceProche}' (similarité élevée)");
+                            aMarquerRouge.Add(logicielEkialis);
+                            Console.WriteLine($"🔴 À marquer ROUGE: '{logicielEkialis.name}' (absent SharePoint)");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"🔴 Déjà ROUGE: '{logicielEkialis.name}' (absent SharePoint)");
                         }
                     }
                 }
 
-                // Afficher les diagnostics
-                correspondances.ForEach(Console.WriteLine);
-                manquantsSharePoint.ForEach(Console.WriteLine);
+                Console.WriteLine($"\n📊 RÉSUMÉ:");
+                Console.WriteLine($"   - À marquer en ROUGE (obsolètes): {aMarquerRouge.Count}");
+                Console.WriteLine($"   - À marquer en VERT (valides): {aMarquerVert.Count}");
 
-                // 4. Identification des logiciels vraiment obsolètes
-                var logicielsObsoletes = logicielsEkialis
-                    .Where(logiciel => !nomsSharePointNormalises.Contains(logiciel.nameNormalized))
-                    .ToList();
+                // 4. Application des couleurs ROUGE
+                var marquagesRougeReussis = 0;
+                var marquagesRougeEchecs = 0;
 
-                Console.WriteLine($"\n🔍 Logiciels réellement obsolètes identifiés: {logicielsObsoletes.Count}");
-
-                // Afficher la liste des logiciels qui seraient marqués
-                if (logicielsObsoletes.Any())
+                foreach (var logiciel in aMarquerRouge)
                 {
-                    Console.WriteLine("📋 Logiciels qui seront marqués obsolètes :");
-                    foreach (var obsolete in logicielsObsoletes.Take(10))
-                    {
-                        Console.WriteLine($"   - '{obsolete.name}' (ID: {obsolete.id})");
-                    }
-                }
-
-                // 5. Marquage en rouge des logiciels obsolètes (avec confirmation)
-                var marquagesReussis = 0;
-                var marquagesEchecs = 0;
-
-                foreach (var logicielObsolete in logicielsObsoletes)
-                {
-                    Console.WriteLine($"🔴 Marquage de '{logicielObsolete.name}' (ID: {logicielObsolete.id})");
-
-                    // Vérifier si déjà rouge pour éviter les appels inutiles
-                    if (logicielObsolete.currentColor.ToUpper() == "FF0000")
-                    {
-                        Console.WriteLine($"  ✅ Déjà marqué en rouge, ignoré");
-                        marquagesReussis++;
-                        continue;
-                    }
-
-                    var success = await ekialisService.UpdateComponentColorAsync(logicielObsolete.id, "FF0000");
+                    Console.WriteLine($"🔴 Marquage ROUGE: '{logiciel.name}' (ID: {logiciel.id})");
+                    var success = await ekialisService.UpdateComponentColorAsync(logiciel.id, "FF0000");
 
                     if (success)
-                    {
-                        marquagesReussis++;
-                        Console.WriteLine($"  ✅ Marqué en rouge avec succès");
-                    }
+                        marquagesRougeReussis++;
                     else
-                    {
-                        marquagesEchecs++;
-                        Console.WriteLine($"  ❌ Échec du marquage");
-                    }
+                        marquagesRougeEchecs++;
+                }
+
+                // 5. Application des couleurs VERT
+                var marquagesVertReussis = 0;
+                var marquagesVertEchecs = 0;
+
+                foreach (var logiciel in aMarquerVert)
+                {
+                    Console.WriteLine($"🟢 Marquage VERT: '{logiciel.name}' (ID: {logiciel.id})");
+                    var success = await ekialisService.UpdateComponentColorAsync(logiciel.id, "22B14C");
+
+                    if (success)
+                        marquagesVertReussis++;
+                    else
+                        marquagesVertEchecs++;
                 }
 
                 return new
                 {
                     totalEkialis = logicielsEkialis.Count,
-                    totalSharePoint = nomsSharePointOriginal.Count,
-                    logicielsObsoletes = logicielsObsoletes.Count,
-                    marquagesReussis,
-                    marquagesEchecs,
-                    diagnostics = new
+                    totalSharePoint = nomsSharePoint.Count,
+                    marquagesRouge = new
                     {
-                        correspondancesFound = correspondances.Count,
-                        logicielsMarques = logicielsObsoletes.Select(l => new
-                        {
-                            id = l.id,
-                            nom = l.name,
-                            nomNormalise = l.nameNormalized,
-                            ancienneCouleur = l.currentColor,
-                            nouvelleCouleur = "FF0000"
-                        }).ToList()
-                    }
+                        total = aMarquerRouge.Count,
+                        reussis = marquagesRougeReussis,
+                        echecs = marquagesRougeEchecs
+                    },
+                    marquagesVert = new
+                    {
+                        total = aMarquerVert.Count,
+                        reussis = marquagesVertReussis,
+                        echecs = marquagesVertEchecs
+                    },
+                    logicielsRouges = aMarquerRouge.Select(l => l.name).ToList(),
+                    logicielsVerts = aMarquerVert.Select(l => l.name).ToList()
                 };
             }
             catch (Exception ex)
@@ -508,9 +492,8 @@ namespace API_Ekialis_Excel.Controllers
                 {
                     totalEkialis = 0,
                     totalSharePoint = 0,
-                    logicielsObsoletes = 0,
-                    marquagesReussis = 0,
-                    marquagesEchecs = 1,
+                    marquagesRouge = new { total = 0, reussis = 0, echecs = 1 },
+                    marquagesVert = new { total = 0, reussis = 0, echecs = 0 },
                     erreur = ex.Message
                 };
             }
