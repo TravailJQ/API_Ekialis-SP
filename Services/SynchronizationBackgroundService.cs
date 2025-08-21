@@ -332,13 +332,13 @@ namespace API_Ekialis_Excel.Services
 
                 foreach (var logicielObsolete in logicielsObsoletes)
                 {
-                    if (logicielObsolete.currentColor.ToUpper() == "FF0000")
+                    if (logicielObsolete.currentColor.ToUpper() == "22B14C")
                     {
                         marquagesReussis++;
                         continue;
                     }
 
-                    var success = await ekialisService.UpdateComponentColorAsync(logicielObsolete.id, "FF0000");
+                    var success = await ekialisService.UpdateComponentColorAsync(logicielObsolete.id, "22B14C");
 
                     if (success)
                         marquagesReussis++;

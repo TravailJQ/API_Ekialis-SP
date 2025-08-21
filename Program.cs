@@ -1,11 +1,11 @@
-using API_Ekialis_Excel.Services;
+ï»¿using API_Ekialis_Excel.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
 
-// Enregistrement des services personnalisés
+// Enregistrement des services personnalisï¿½s
 builder.Services.AddHttpClient<EkialisService>();
 // Enregistrement du service SharePoint
 builder.Services.AddScoped<SharePointRestService>(); // Utilise HttpClient dans le service, pas via DI directe

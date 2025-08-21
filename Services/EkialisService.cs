@@ -505,24 +505,6 @@ namespace API_Ekialis_Excel.Services
                 var currentData = await getResponse.Content.ReadAsStringAsync();
                 var componentJson = JObject.Parse(currentData);
 
-                // Récupérer l'externalId actuel
-                var currentExternalId = componentJson["externalId"]?.ToString() ?? "";
-
-                // SOLUTION POUR LES externalId VIDES : 
-                // Si vide, on génère un ID unique avec un préfixe spécifique pour éviter les conflits
-                string externalIdToUse;
-                if (string.IsNullOrEmpty(currentExternalId))
-                {
-                    // Générer un ID unique basé sur componentId + timestamp pour éviter les doublons
-                    externalIdToUse = $"COLOR_SYNC_{componentId}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
-                    Console.WriteLine($"    ⚠️ ExternalId vide, génération d'un nouvel ID: {externalIdToUse}");
-                }
-                else
-                {
-                    externalIdToUse = currentExternalId;
-                    Console.WriteLine($"    ✅ ExternalId existant conservé: {currentExternalId}");
-                }
-
                 // Construire l'objet de mise à jour avec toutes les propriétés requises
                 var updateData = new
                 {
@@ -532,83 +514,31 @@ namespace API_Ekialis_Excel.Services
                     componentClass = componentJson["componentClass"]?["id"]?.ToObject<int>() ?? 1,
                     componentStatus = componentJson["componentStatus"]?["id"]?.ToObject<int>() ?? 5,
                     company = componentJson["company"]?["id"]?.ToObject<int>() ?? 1,
-                    externalId = externalIdToUse
+                    externalId = componentJson["externalId"]?.ToString() ?? ""
                 };
 
                 var jsonContent = JsonConvert.SerializeObject(updateData);
-                Console.WriteLine($"    📝 JSON mise à jour couleur: {jsonContent}");
+                Console.WriteLine($"    JSON mise à jour couleur: {jsonContent}");
 
                 var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
                 var response = await _httpClient.PutAsync(apiUrl, content);
 
                 if (response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"    ✅ Couleur du composant {componentId} mise à jour avec succès vers {newColor}");
+                    Console.WriteLine($"    ✅ Couleur du composant mise à jour avec succès");
                     return true;
                 }
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"    ❌ Erreur mise à jour couleur pour {componentId}: {response.StatusCode}");
-                    Console.WriteLine($"    📋 Détail: {errorContent}");
-
-                    // Si c'est encore un problème d'externalId, essayer sans l'externalId
-                    if (errorContent.Contains("EXTERNAL_ID") && !string.IsNullOrEmpty(currentExternalId))
-                    {
-                        Console.WriteLine($"    🔄 Retry sans externalId pour éviter le conflit...");
-                        return await UpdateComponentColorWithoutExternalIdAsync(componentId, newColor, componentJson);
-                    }
-
+                    Console.WriteLine($"    ❌ Erreur mise à jour couleur: {response.StatusCode}");
+                    Console.WriteLine($"    Détail: {errorContent}");
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Exception lors de la mise à jour de la couleur pour {componentId}: {ex.Message}");
-                return false;
-            }
-        }
-
-        // Méthode de fallback sans externalId en cas de conflit
-        private async Task<bool> UpdateComponentColorWithoutExternalIdAsync(int componentId, string newColor, JObject componentJson)
-        {
-            try
-            {
-                var apiUrl = $"/api/explore/components/{componentId}";
-
-                // Construire l'objet SANS externalId
-                var updateData = new
-                {
-                    name = componentJson["name"]?.ToString() ?? "",
-                    icon = componentJson["icon"]?.ToString() ?? "",
-                    color = newColor,
-                    componentClass = componentJson["componentClass"]?["id"]?.ToObject<int>() ?? 1,
-                    componentStatus = componentJson["componentStatus"]?["id"]?.ToObject<int>() ?? 5,
-                    company = componentJson["company"]?["id"]?.ToObject<int>() ?? 1
-                    // PAS d'externalId pour éviter les conflits
-                };
-
-                var jsonContent = JsonConvert.SerializeObject(updateData);
-                Console.WriteLine($"    📝 JSON retry sans externalId: {jsonContent}");
-
-                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PutAsync(apiUrl, content);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    Console.WriteLine($"    ✅ Couleur mise à jour avec succès (sans externalId) pour {componentId}");
-                    return true;
-                }
-                else
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"    ❌ Échec définitif pour {componentId}: {errorContent}");
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Exception fallback pour {componentId}: {ex.Message}");
+                Console.WriteLine($"❌ Exception lors de la mise à jour de la couleur: {ex.Message}");
                 return false;
             }
         }
