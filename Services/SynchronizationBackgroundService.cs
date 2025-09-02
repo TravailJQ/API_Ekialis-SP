@@ -332,7 +332,7 @@ namespace API_Ekialis_Excel.Services
 
                 foreach (var logicielObsolete in logicielsObsoletes)
                 {
-                    if (logicielObsolete.currentColor.ToUpper() == "22B14C")
+                    if (logicielObsolete.currentColor.ToUpper() == "FF0000")
                     {
                         marquagesReussis++;
                         continue;
