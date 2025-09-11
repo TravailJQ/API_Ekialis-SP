@@ -337,8 +337,9 @@ namespace API_Ekialis_Excel.Services
                         marquagesReussis++;
                         continue;
                     }
+                    
 
-                    var success = await ekialisService.UpdateComponentColorAsync(logicielObsolete.id, "22B14C");
+                    var success = await ekialisService.UpdateComponentColorAsync(logicielObsolete.id, "FF0000");
 
                     if (success)
                         marquagesReussis++;
