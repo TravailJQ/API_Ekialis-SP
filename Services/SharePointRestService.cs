@@ -40,7 +40,31 @@ namespace API_Ekialis_Excel.Services
             return client;
         }
 
+        /// <summary>
+        /// Extrait la valeur d'un champ SharePoint (gère les types Choice, string, etc.)
+        /// </summary>
+        private string ExtractFieldValue(JToken fieldValue)
+        {
+            if (fieldValue == null || fieldValue.Type == JTokenType.Null)
+            {
+                return "";
+            }
 
+            // Si c'est un objet avec __metadata et results (champ Choice)
+            if (fieldValue is JObject obj && obj.ContainsKey("results"))
+            {
+                var results = obj["results"] as JArray;
+                if (results != null && results.Count > 0)
+                {
+                    // Option 2: Tous les éléments séparés par des virgules (si multi-choix)
+                    return string.Join(", ", results.Select(r => r.ToString()));
+                }
+                return "";
+            }
+
+            // Si c'est une valeur simple (string, number, etc.)
+            return fieldValue.ToString() ?? "";
+        }
 
         public async Task<List<Dictionary<string, object>>> GetListItemsAsync()
         {
@@ -70,7 +94,8 @@ namespace API_Ekialis_Excel.Services
                     {
                         if (!prop.Name.StartsWith("__") && prop.Name != "odata.type")
                         {
-                            itemDict[prop.Name] = prop.Value?.ToString() ?? "";
+                            // Utilise la nouvelle méthode d'extraction
+                            itemDict[prop.Name] = ExtractFieldValue(prop.Value);
                         }
                     }
                     items.Add(itemDict);
@@ -124,7 +149,12 @@ namespace API_Ekialis_Excel.Services
 
                         foreach (var field in selectedFields)
                         {
-                            dict[field] = item[field]?.ToString() ?? "";
+                            // CORRECTION ICI : Utilise ExtractFieldValue pour gérer les champs Choice
+                            var fieldValue = item[field];
+                            dict[field] = ExtractFieldValue(fieldValue);
+
+                            // Debug pour voir la valeur extraite
+                            Console.WriteLine($"Champ '{field}': {dict[field]}");
                         }
 
                         results.Add(dict);
